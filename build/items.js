@@ -1,0 +1,328 @@
+import { GAMESTATE } from "./game.js";
+import { SkillType } from "./skills.js";
+import { addItem, calcItemEnergyGain } from "./simulation.js";
+import { ENERGY_TEXT, HASTE_EMOJI } from "./rendering_constants.js";
+import { ItemSkillModifierList } from "./modifiers.js";
+export var ItemType;
+(function (ItemType) {
+    ItemType[ItemType["Food"] = 0] = "Food";
+    ItemType[ItemType["Arrow"] = 1] = "Arrow";
+    ItemType[ItemType["Coin"] = 2] = "Coin";
+    ItemType[ItemType["Mushroom"] = 3] = "Mushroom";
+    ItemType[ItemType["GoblinSupplies"] = 4] = "GoblinSupplies";
+    ItemType[ItemType["TravelEquipment"] = 5] = "TravelEquipment";
+    ItemType[ItemType["Book"] = 6] = "Book";
+    ItemType[ItemType["ScrollOfHaste"] = 7] = "ScrollOfHaste";
+    ItemType[ItemType["GoblinWaraxe"] = 8] = "GoblinWaraxe";
+    ItemType[ItemType["FiremakingKit"] = 9] = "FiremakingKit";
+    ItemType[ItemType["Reagents"] = 10] = "Reagents";
+    ItemType[ItemType["MagicalRoots"] = 11] = "MagicalRoots";
+    ItemType[ItemType["GoblinTreasure"] = 12] = "GoblinTreasure";
+    ItemType[ItemType["Fish"] = 13] = "Fish";
+    ItemType[ItemType["BanditWeapons"] = 14] = "BanditWeapons";
+    ItemType[ItemType["Cactus"] = 15] = "Cactus";
+    ItemType[ItemType["CityChain"] = 16] = "CityChain";
+    ItemType[ItemType["WerewolfFur"] = 17] = "WerewolfFur";
+    ItemType[ItemType["OasisWater"] = 18] = "OasisWater";
+    ItemType[ItemType["Calamari"] = 19] = "Calamari";
+    ItemType[ItemType["MysticIncense"] = 20] = "MysticIncense";
+    ItemType[ItemType["OracleBones"] = 21] = "OracleBones";
+    ItemType[ItemType["WormHideCoat"] = 22] = "WormHideCoat";
+    ItemType[ItemType["DjinnLamp"] = 23] = "DjinnLamp";
+    ItemType[ItemType["Dreamcatcher"] = 24] = "Dreamcatcher";
+    ItemType[ItemType["MagicEssence"] = 25] = "MagicEssence";
+    ItemType[ItemType["CraftingRecipe"] = 26] = "CraftingRecipe";
+    ItemType[ItemType["KnightlyBoots"] = 27] = "KnightlyBoots";
+    ItemType[ItemType["DragonScale"] = 28] = "DragonScale";
+    ItemType[ItemType["CaveInsects"] = 29] = "CaveInsects";
+    ItemType[ItemType["MagicalVessel"] = 30] = "MagicalVessel";
+    ItemType[ItemType["MagicRing"] = 31] = "MagicRing";
+    ItemType[ItemType["Count"] = 32] = "Count";
+})(ItemType || (ItemType = {}));
+export class ItemDefinition {
+    enum = ItemType.Count;
+    name = "";
+    name_plural = "";
+    icon = "";
+    skill_modifiers = new ItemSkillModifierList([]);
+    get_custom_tooltip = () => { return ""; };
+    get_custom_effect_text = () => { return ""; };
+    on_consume = () => { };
+    constructor(overrides = {}) {
+        Object.assign(this, overrides);
+    }
+    getTooltip() {
+        const custom = this.get_custom_tooltip();
+        if (custom.length != 0) {
+            return custom;
+        }
+        return this.skill_modifiers.getDescription();
+    }
+    getEffectText(amount) {
+        const custom = this.get_custom_effect_text(amount);
+        if (custom.length != 0) {
+            return custom;
+        }
+        return this.skill_modifiers.getStacked(amount).getAppliedDescription();
+    }
+    applyEffects(amount) {
+        this.on_consume(amount);
+        this.skill_modifiers.getStacked(amount).applyEffect();
+    }
+    getNameWithEmoji(amount) {
+        return `${this.icon}${amount == 1 ? this.name : this.name_plural}`;
+    }
+}
+export const HASTE_MULT = 5;
+export const MAGIC_RING_MULT = 3;
+export const ITEMS = [
+    new ItemDefinition({
+        enum: ItemType.Food, name: `Food`, name_plural: `Food`,
+        icon: `🍲`,
+        get_custom_tooltip: () => { return `Gives ${calcItemEnergyGain(5)} ${ENERGY_TEXT} each<br>Can take you above your Max Energy<br><br>Right-click to use all`; },
+        get_custom_effect_text: (amount) => { return `Gained ${amount * calcItemEnergyGain(5)} ${ENERGY_TEXT}`; },
+        on_consume: (amount) => { GAMESTATE.current_energy += calcItemEnergyGain(5) * amount; },
+    }),
+    new ItemDefinition({
+        enum: ItemType.Arrow, name: `Arrow`, name_plural: `Arrows`,
+        icon: `🏹`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Combat, 0.15]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.Coin, name: `Coin`, name_plural: `Coins`,
+        icon: `💰`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Charisma, 0.15]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.Mushroom, name: `Mushroom`, name_plural: `Mushrooms`,
+        icon: `🍄`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Magic, 0.2],
+            [SkillType.Search, 0.2]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.GoblinSupplies, name: `Goblin Supplies`, name_plural: `Goblin Supplies`,
+        icon: `📦`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Subterfuge, 0.15],
+            [SkillType.Combat, 0.1]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.TravelEquipment, name: `Travel Equipment`, name_plural: `Travel Equipment`,
+        icon: `🎒`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Travel, 0.1],
+            [SkillType.Survival, 0.1]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.Book, name: `Book`, name_plural: `Books`,
+        icon: `📚`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Study, 0.1]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.ScrollOfHaste, name: `Scroll of Haste`, name_plural: `Scrolls of Haste`,
+        icon: HASTE_EMOJI,
+        get_custom_tooltip: () => { return `The next Task rep you start is ${HASTE_MULT}x as fast<br><br>Sure would be handy to have more than one of these`; },
+        get_custom_effect_text: (amount) => { return `Next ${amount} Task reps are ${HASTE_MULT}x as fast`; },
+        on_consume: (amount) => { GAMESTATE.queued_scrolls_of_haste += amount; },
+    }),
+    new ItemDefinition({
+        enum: ItemType.GoblinWaraxe, name: `Goblin Waraxe`, name_plural: `Goblin Waraxes`,
+        icon: `🪓`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Combat, 1]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.FiremakingKit, name: `Firemaking Kit`, name_plural: `Firemaking Kits`,
+        icon: `🔥`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Survival, 0.15]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.Reagents, name: `Reagent`, name_plural: `Reagents`,
+        icon: `🌿`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Magic, 0.2],
+            [SkillType.Crafting, 0.1],
+            [SkillType.Druid, 0.1]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.MagicalRoots, name: `Magical Root`, name_plural: `Magical Roots`,
+        icon: `🌲`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Survival, 0.1],
+            [SkillType.Magic, 0.1],
+            [SkillType.Druid, 0.1]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.GoblinTreasure, name: `Goblin Treasure`, name_plural: `Goblin Treasures`,
+        icon: `💎`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Subterfuge, 0.5],
+            [SkillType.Survival, 0.5]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.Fish, name: `Fish`, name_plural: `Fish`,
+        icon: `🐟`,
+        get_custom_tooltip: () => { return `Gives ${calcItemEnergyGain(10)} ${ENERGY_TEXT} each`; },
+        get_custom_effect_text: (amount) => { return `Gained ${amount * calcItemEnergyGain(10)} ${ENERGY_TEXT}`; },
+        on_consume: (amount) => { GAMESTATE.current_energy += calcItemEnergyGain(10) * amount; },
+    }),
+    new ItemDefinition({
+        enum: ItemType.BanditWeapons, name: `Bandit Weapon`, name_plural: `Bandit Weapons`,
+        icon: `🔪`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Subterfuge, 0.1],
+            [SkillType.Combat, 0.2]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.BanditWeapons, name: `Cactus`, name_plural: `Cactuses`,
+        icon: `🌵`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Survival, 0.1],
+            [SkillType.Fortitude, 0.1]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.CityChain, name: `City Chain`, name_plural: `City Chains`,
+        icon: `🔗`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Charisma, 0.5],
+            [SkillType.Subterfuge, 0.5]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.WerewolfFur, name: `Werewolf Fur`, name_plural: `Werewolf Furs`,
+        icon: `🐺`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Charisma, 0.2],
+            [SkillType.Survival, 0.2]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.OasisWater, name: `Oasis Water`, name_plural: `Oasis Water`,
+        icon: `💧`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Magic, 0.2],
+            [SkillType.Survival, 0.1]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.Calamari, name: `Calamari`, name_plural: `Calamari`,
+        icon: `🦑`,
+        get_custom_tooltip: () => { return `Gives ${calcItemEnergyGain(50)} ${ENERGY_TEXT} each`; },
+        get_custom_effect_text: (amount) => { return `Gained ${amount * calcItemEnergyGain(50)} ${ENERGY_TEXT}`; },
+        on_consume: (amount) => { GAMESTATE.current_energy += calcItemEnergyGain(50) * amount; },
+    }),
+    new ItemDefinition({
+        enum: ItemType.MysticIncense, name: `Mystic Incense`, name_plural: `Mystic Incense`,
+        icon: `🕯️`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Ascension, 0.1]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.OracleBones, name: `Oracle Bone`, name_plural: `Oracle Bones`,
+        icon: `🦴`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Search, 0.2],
+            [SkillType.Druid, 0.2]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.WormHideCoat, name: `Worm Hide Coat`, name_plural: `Worm Hide Coats`,
+        icon: `🧥`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Fortitude, 1]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.DjinnLamp, name: `Djinn Lamp`, name_plural: `Djinn Lamps`,
+        icon: `🧞`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Ascension, 0.3],
+            [SkillType.Magic, 0.3]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.Dreamcatcher, name: `Dreamcatcher`, name_plural: `Dreamcatchers`,
+        icon: `🕸️`,
+        get_custom_tooltip: () => { return `Creates a copy of every Item type you've obtained this Energy Reset (except Dreamcatchers)`; },
+        get_custom_effect_text: (amount) => { return `Copied ${amount * (GAMESTATE.items_found_this_energy_reset.length - 1)} Items`; },
+        on_consume: (amount) => {
+            for (const item of GAMESTATE.items_found_this_energy_reset) {
+                if (item != ItemType.Dreamcatcher) {
+                    addItem(item, amount);
+                }
+            }
+        },
+    }),
+    new ItemDefinition({
+        enum: ItemType.MagicEssence, name: `Magical Essence`, name_plural: `Magical Essences`,
+        icon: `🌠`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Magic, 3]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.CraftingRecipe, name: `Crafting Recipe`, name_plural: `Crafting Recipes`,
+        icon: `🛠️`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Crafting, 0.3]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.KnightlyBoots, name: `Knightly Boots`, name_plural: `Knightly Boots`,
+        icon: `👢`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Combat, 0.2],
+            [SkillType.Fortitude, 0.2]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.DragonScale, name: `Dragon Scale`, name_plural: `Dragon Scales`,
+        icon: `🐲`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Combat, 0.5],
+            [SkillType.Fortitude, 0.5]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.CaveInsects, name: `Cave Insect`, name_plural: `Cave Insects`,
+        icon: `🦟`,
+        get_custom_tooltip: () => { return `Gives ${calcItemEnergyGain(5)} ${ENERGY_TEXT} each`; },
+        get_custom_effect_text: (amount) => { return `Gained ${amount * calcItemEnergyGain(5)} ${ENERGY_TEXT}`; },
+        on_consume: (amount) => { GAMESTATE.current_energy += calcItemEnergyGain(5) * amount; },
+    }),
+    new ItemDefinition({
+        enum: ItemType.MagicalVessel, name: `Magical Vessel`, name_plural: `Magical Vessels`,
+        icon: `🏺`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Ascension, 0.3]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.MagicRing, name: `Magic Ring`, name_plural: `Magic Rings`,
+        icon: `💍`,
+        get_custom_tooltip: () => { return `The next Task rep you start gives ${MAGIC_RING_MULT}x as much XP`; },
+        get_custom_effect_text: (amount) => { return `Next ${amount} Task reps give ${MAGIC_RING_MULT}x as much XP`; },
+        on_consume: (amount) => { GAMESTATE.queued_magic_rings += amount; },
+    }),
+];
+export const ARTIFACTS = [ItemType.ScrollOfHaste, ItemType.Dreamcatcher, ItemType.MagicRing];
+//# sourceMappingURL=items.js.map
