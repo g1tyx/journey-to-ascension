@@ -1,12 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
-<meta charset="utf-8" />
-<head></head>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="css2.css" rel="stylesheet">
-<link rel="stylesheet" href="style.css" />
-<title>Journey to Ascension</title>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Journey to Ascension</title>
+    <meta name="author" content="Magne 'Meneth' Skjæran">
+    <meta name="theme-color" content="#8c386d">
+    <meta name="description" content="Learn, die, repeat; an active incremental game to Journey to Ascension - made by Magne 'Meneth' Skjæran">
+
+    <link rel="icon" type="image/svg+xml" href="./favicon.png">
+    <link rel="apple-touch-icon" href="./apple.png">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="canonical" href="https://meneth.github.io/journey-to-ascension/">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://meneth.github.io/journey-to-ascension/">
+    <meta property="og:title" content="Journey to Ascension">
+    <meta property="og:description" content="Learn, die, repeat; an active incremental game to Journey to Ascension - made by Magne 'Meneth' Skjæran">
+    <meta property="og:image" content="social.png">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Journey to Ascension">
+    <meta name="twitter:description" content="Learn, die, repeat; an active incremental game to Journey to Ascension - made by Magne 'Meneth' Skjæran">
+    <meta name="twitter:image" content="social.png">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+
+    <link rel="preload" href="./style.css" as="style">
+    <link rel="preload" href="./build/game.js" as="script" crossorigin>
+
+    <link href="css2.css" rel="stylesheet">
+    <link rel="stylesheet" href="./style.css">
+</head>
 
 <body>
 <script src="chs.js"></script>
@@ -77,10 +106,12 @@
         <div id="end-of-content-overlay" class="full-screen-overlay hidden">
             <div id="end-of-content-box">
                 <h2 id=>End of Content</h2>
-                <p>You've reached the end of all content that exists!</p>
-                <p>Congrats on winning the game. Fow now.</p>
+                <p>You have at last claimed your place among the Gods in Heaven</p>
+                <p>Thank you for playing Journey to Ascension!</p>
                 <h3 id="end-of-content-reset-count"></h3>
-                <button id="end-of-content-reset">Do Energy Reset</button>
+                <button id="end-of-content-credits" class="end-of-content-button">Credits</button>
+                <button id="end-of-content-reset" class="end-of-content-button">Do Energy Reset</button>
+                <button id="end-of-content-prestige" class="end-of-content-button">Prestige</button>
             </div>
         </div>
 
@@ -91,11 +122,17 @@
         <div id="settings-overlay" class="full-screen-overlay hidden">
             <div id="settings" class="overlay-box">
                 <button class="close">X</button>
+                <h1>Settings</h1>
+                <button id="manual-tooltips"></button>
                 <div>
                     <button id="save">Save</button>
                     <button id="load">Load</button>
                 </div>
-                <button id="changelog">Changelog</button>
+                <button id="reset-save">Reset Save</button>
+                <div>
+                    <button id="changelog">Changelog</button>
+                    <button id="credits">Credits</button>
+                </div>
             </div>
         </div>
 
@@ -103,10 +140,16 @@
             <div id="changelog-box" class="overlay-box"></div>
         </div>
 
+        <div id="credits-overlay" class="full-screen-overlay hidden">
+            <div id="credits-box" class="overlay-box"></div>
+        </div>
+
         <div id="confirmation-overlay" class="full-screen-overlay hidden"></div>
         <div id="stats-overlay" class="full-screen-overlay hidden">
             <div id="stats-box" class="overlay-box"></div>
         </div>
+
+        <div id="hints-overlay" class="full-screen-overlay hidden"></div>
     </main>
 
     <footer>

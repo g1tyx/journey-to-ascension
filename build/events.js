@@ -18,7 +18,8 @@ export var EventType;
     EventType[EventType["NewHighestZoneFullyCompleted"] = 11] = "NewHighestZoneFullyCompleted";
     EventType[EventType["NewPrestigeLayer"] = 12] = "NewPrestigeLayer";
     EventType[EventType["SkippedZones"] = 13] = "SkippedZones";
-    EventType[EventType["Count"] = 14] = "Count";
+    EventType[EventType["SkippedTasks"] = 14] = "SkippedTasks";
+    EventType[EventType["Count"] = 15] = "Count";
 })(EventType || (EventType = {}));
 export class EventContext {
 }
@@ -50,5 +51,8 @@ export class UnlockedSkillContext extends EventContext {
 }
 export class HighestZoneContext extends EventContext {
     zone = 0;
+}
+export class SkippedTasksContext extends EventContext {
+    tasks = 0;
 }
 //# sourceMappingURL=events.js.map

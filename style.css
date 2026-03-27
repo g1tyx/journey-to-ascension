@@ -18,7 +18,6 @@
     --disabled-background-color-lighter: #999;
     --standard-div-spacing: 8px;
 
-    --palette-dark-gray-darker: #616161;
     --tooltip-line-height: 1.6;
     --tooltip-header-size: 1.25rem;
     --tooltip-subtitle-size: 1rem;
@@ -125,6 +124,7 @@ body {
 button {
     border-radius: var(--default-border-radius);
     background: var(--element-foreground-color);
+    outline: none;
 
     border-top: 2px solid #545454;
     border-left: 2px solid #545454;
@@ -294,8 +294,8 @@ button:hover:not(.disabled):not(:disabled) {
     color: red;
 }
 
-.perk-unlock {
-    animation: perk-glow 1s infinite alternate;
+.unlock {
+    animation: unlock-glow 1s infinite alternate;
 }
 
 @keyframes prestige-glow {
@@ -308,7 +308,7 @@ button:hover:not(.disabled):not(:disabled) {
     }
 }
 
-@keyframes perk-glow {
+@keyframes unlock-glow {
     from {
         box-shadow: 0 0 8px 2px rgba(52, 219, 66, 0.6);
     }
@@ -412,21 +412,143 @@ button:hover:not(.disabled):not(:disabled) {
 }
 
 #controls .element {
-    width: 60px;
-    height: 60px;
+    width: 64px;
+    height: 64px;
+}
+
+.controls-row {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    margin-bottom: 8px;
 }
 
 .automation {
     text-align: center;
+    display: flex;
+    flex-direction: column;
 }
 
-#controls .automation button {
-    width: 60px;
-    height: 42px;
+.automation-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+
+.automation-zone-cap {
+    display: flex;
+    flex-direction: column;
+}
+
+#controls .automation button:not(.numeric-input-button) {
+    width: 68px;
+    height: 44px;
 }
 
 .automation .on {
     background-color: rgb(49, 221, 72);
+}
+
+/* MARK: Numeric Input
+*/
+
+.numeric-input-wrapper {
+    display: inline-flex;
+    position: relative;
+    width: 44px;
+    height: 30px;
+    margin: 5px 5px 5px 0;
+    flex-shrink: 0;
+    cursor: ns-resize;
+}
+
+.numeric-input {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--default-border-radius);
+    background: var(--element-foreground-color-brighter);
+    border: 1px solid #222;
+    padding: 4px 16px 4px 4px;
+    text-align: center;
+    outline: none;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3);
+    transition: background 0.15s ease;
+    box-sizing: border-box;
+    -moz-appearance: textfield;
+}
+
+.numeric-input:focus {
+    background: var(--element-foreground-color);
+}
+
+.numeric-input::-webkit-outer-spin-button,
+.numeric-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.numeric-input-buttons {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    gap: 2px;
+}
+
+.numeric-input-button {
+    width: 10px;
+    height: 8px;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+    min-height: 0;
+    background: var(--element-foreground-color);
+    border: none;
+    border-radius: 1px;
+    cursor: pointer;
+    font-size: 0;
+    line-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.numeric-input-button:hover:not(.disabled) {
+    background: var(--element-foreground-color-brighter);
+}
+
+.numeric-input-button:active:not(.disabled) {
+    background: var(--element-background-color);
+}
+
+.numeric-input-button:focus-visible {
+    outline: 2px solid var(--element-foreground-color-brighter);
+    outline-offset: 1px;
+}
+
+.numeric-input-button.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.numeric-input-increment::after,
+.numeric-input-decrement::after {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 2.5px solid transparent;
+    border-right: 2.5px solid transparent;
+}
+
+.numeric-input-increment::after {
+    border-bottom: 3px solid var(--text-color, #000);
+}
+
+.numeric-input-decrement::after {
+    border-top: 3px solid var(--text-color, #000);
 }
 
 /* MARK: Items
@@ -514,10 +636,21 @@ button:hover:not(.disabled):not(:disabled) {
 
 #end-of-content-box {
     text-align: center;
+    display: flex;
+    flex-direction: column;
 }
 
-button#end-of-content-reset, button.game-over-dismiss {
+button.end-of-content-button, button.dismiss {
     font-size: 1.5em;
+}
+
+.end-of-content-button {
+    margin-top: 5px;
+}
+
+#game-over-overlay button.dismiss {
+    width: 370px;
+    margin: 3px;
 }
 
 #game-over-overlay p {
@@ -539,7 +672,7 @@ button.do-prestige {
 #prestige-box {
     position: relative;
     height: 730px;
-    width: 530px;
+    width: 590px;
     padding: 0;
     
     scrollbar-color: var(--element-foreground-color) var(--element-foreground-color-brighter); /* Firefox */
@@ -562,15 +695,19 @@ button.do-prestige {
 .close {
     position: absolute;
     top: 8px;
-    right: 20px;
+    right: 8px;
     width: 32px;
     height: 32px;
     font-size: 1em;
 }
 
+.close.close-scroll {
+   right: 20px;
+}
+
 .prestige-purchase {
-    width: 115px;
-    height: 84px;
+    width: 130px;
+    height: 90px;
     text-align: center;
     display: flex;
     align-items: center;
@@ -580,10 +717,6 @@ button.do-prestige {
 div.prestige-purchase {
     background-color: var(--prestige-unlock-bought-color);
     border-radius: var(--default-border-radius);
-}
-
-.prestige-purchase.prestige-purchase-repeatable {
-    height: 84px;
 }
 
 .prestige-section {
@@ -764,9 +897,9 @@ div.prestige-purchase {
     gap: var(--standard-div-spacing);
 }
 
-#settings {
-    height: 200px;
-    width: 200px;
+#settings button:not(.close) {
+    width: 120px;
+    font-size: 1.2em;
 }
 
 /* MARK: Changelog
@@ -775,7 +908,7 @@ div.prestige-purchase {
 #changelog-box {
     position: relative;
     height: 730px;
-    width: 530px;
+    width: 800px;
     padding: 0;
     
     scrollbar-color: var(--element-foreground-color) var(--element-foreground-color-brighter); /* Firefox */
@@ -784,6 +917,21 @@ div.prestige-purchase {
 .changelog-entry {
     width: 90%;
     text-align: left;
+}
+
+.error {
+    color: red;
+}
+
+/* MARK: Credits
+*/
+
+#credits-box {
+    position: relative;
+    width: 530px;
+    padding: 0;
+    
+    scrollbar-color: var(--element-foreground-color) var(--element-foreground-color-brighter); /* Firefox */
 }
 
 /* MARK: Messages

@@ -1,18 +1,18 @@
 import { Task, ZONES, TaskType, TASK_LOOKUP, TaskDefinition } from "./zones.js";
 import { GAMESTATE, setTickRate } from "./game.js";
-import { HASTE_MULT, ItemDefinition, ITEMS, ARTIFACTS, ItemType, MAGIC_RING_MULT } from "./items.js";
-import { PerkDefinition, PERKS, PerkType } from "./perks.js";
-import { SkillUpContext, EventType, RenderEvent, GainedPerkContext, UsedItemContext, UnlockedTaskContext, UnlockedSkillContext, EventContext, HighestZoneContext } from "./events.js";
-import { SKILL_DEFINITIONS, SkillDefinition, SkillType } from "./skills.js";
-import { PRESTIGE_UNLOCKABLES, PRESTIGE_REPEATABLES, PrestigeRepeatableType, PrestigeUnlock, PrestigeUnlockType, PrestigeRepeatable, DIVINE_KNOWLEDGE_MULT, DIVINE_APPETITE_ENERGY_ITEM_BOOST_MULT, GOTTA_GO_FAST_BASE, PrestigeLayer, DIVINE_LIGHTNING_EXPONENT_INCREASE, TRANSCENDANT_APTITUDE_MULT, ENERGIZED_INCREASE, DIVINE_SPEED_TICKS_PER_PERCENT } from "./prestige_upgrades.js";
-import { AWAKENING_DIVINE_SPARK_MULT, ENERGETIC_MEMORY_MULT, MAJOR_TIME_COMPRESSION_EFFECT, REFLECTIONS_ON_THE_JOURNEY_BASE, REFLECTIONS_ON_THE_JOURNEY_BOOSTED_BASE } from "./simulation_constants.js";
+import { HASTE_MULT, ItemDefinition, ITEMS, ARTIFACTS, ItemType, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT, NOTE_ITEMS } from "./items.js";
+import { getReflectionsOnTheJourneyExponent, PerkDefinition, PERKS, PerkType } from "./perks.js";
+import { SkillUpContext, EventType, RenderEvent, GainedPerkContext, UsedItemContext, UnlockedTaskContext, UnlockedSkillContext, EventContext, HighestZoneContext, SkippedTasksContext } from "./events.js";
+import { SKILL_DEFINITIONS, SkillDefinition, SKILLS, SkillType } from "./skills.js";
+import { PRESTIGE_UNLOCKABLES, PRESTIGE_REPEATABLES, PrestigeRepeatableType, PrestigeUnlock, PrestigeUnlockType, PrestigeRepeatable, DIVINE_KNOWLEDGE_MULT, DIVINE_APPETITE_ENERGY_ITEM_BOOST_MULT, GOTTA_GO_FAST_BASE, PrestigeLayer, DIVINE_LIGHTNING_EXPONENT_INCREASE, TRANSCENDANT_APTITUDE_MULT, ENERGIZED_INCREASE, DIVINE_SPEED_TICKS_PER_PERCENT, PERKY_BASE, COMPULSIVE_NOTE_TAKING_AMOUNT, ENERGIZED_PERK_INCREASE, MANDATORY_SCHMANDATORY_MULT, DIVINE_ATTUNEMENT_BASE, SPITE_THE_GODS_MULT, DIVINER_KNOWLEDGE_MULT, GODLY_TRAVEL_MULT, FINAL_PRESTIGE_MULT, DIVINE_SUPREMACY_ENERGY } from "./prestige_upgrades.js";
+import { AWAKENING_DIVINE_SPARK_MULT, DEFIED_THE_GODS_SPARK_MULT, ENERGETIC_MEMORY_MULT, MAJOR_TIME_COMPRESSION_EFFECT, SUPPLY_LINES_EFFECT, UNIFIED_THEORY_OF_MAGIC_EFFECT } from "./simulation_constants.js";
 // MARK: Constants
 let task_progress_mult = 1;
 const ZONE_SPEEDUP_BASE = 1.05;
 export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
-export const SAVE_VERSION = "0.1.2";
+export const SAVE_VERSION = "1.0.0";
 // MARK: Skills
 export class Skill {
     type = SkillType.Count;
@@ -30,10 +30,17 @@ export function calcSkillXp(task, task_progress, ignore_boost = false) {
     if (hasPerk(PerkType.Writing)) {
         xp *= 1.5;
     }
+    if (hasPerk(PerkType.GazedBeyondTheVeil)) {
+        xp *= 2;
+    }
     if (hasPrestigeUnlock(PrestigeUnlockType.DivineInspiration)) {
         xp *= 1.5;
     }
     xp *= 1 + getPrestigeRepeatableLevel(PrestigeRepeatableType.DivineKnowledge) * DIVINE_KNOWLEDGE_MULT;
+    xp *= 1 + getPrestigeRepeatableLevel(PrestigeRepeatableType.DivinerKnowledge) * DIVINER_KNOWLEDGE_MULT;
+    if (hasPrestigeUnlock(PrestigeUnlockType.UnparalleledLearning)) {
+        xp *= FINAL_PRESTIGE_MULT;
+    }
     xp *= Math.pow(1.25, task.task_definition.zone_id);
     if (!ignore_boost && task.xp_boosted) {
         xp *= MAGIC_RING_MULT;
@@ -91,6 +98,12 @@ export function calcSkillTaskProgressWithoutLevel(skill_type) {
     if (calcAttunementSkills().includes(skill_type)) {
         mult *= calcAttunementSpeedBonusAtLevel(GAMESTATE.attunement);
     }
+    if (getSpiteTheGodsSkills().includes(skill_type)) {
+        mult *= calcSpiteTheGodsBonus();
+    }
+    if (skill_type == SkillType.Travel && hasPrestigeUnlock(PrestigeUnlockType.GodlyTravel)) {
+        mult *= GODLY_TRAVEL_MULT;
+    }
     return mult;
 }
 export function calcSkillTaskProgressMultiplier(skill_type) {
@@ -111,15 +124,15 @@ function initializeSkills() {
     GAMESTATE.skills = [];
     GAMESTATE.skills_at_start_of_reset = [];
     const global_target_level = getPrestigeRepeatableLevel(PrestigeRepeatableType.TranscendantAptitude) * TRANSCENDANT_APTITUDE_MULT;
-    for (let i = 0; i < SkillType.Count; i++) {
-        const target_level = i == SkillType.Ascension ? global_target_level / 2 : global_target_level;
-        GAMESTATE.skills.push(new Skill(i, target_level));
+    for (let skill = 0; skill < SkillType.Count; ++skill) {
+        const target_level = skill == SkillType.Ascension ? global_target_level / 2 : global_target_level;
+        GAMESTATE.skills.push(new Skill(skill, target_level));
         GAMESTATE.skills_at_start_of_reset.push(target_level);
     }
 }
 function storeLoopStartNumbersForNextGameOver() {
-    for (let i = 0; i < SkillType.Count; i++) {
-        GAMESTATE.skills_at_start_of_reset[i] = getSkill(i).level;
+    for (const skill of SKILLS) {
+        GAMESTATE.skills_at_start_of_reset[skill] = getSkill(skill).level;
     }
     GAMESTATE.attunement_at_start_of_reset = GAMESTATE.attunement;
     GAMESTATE.power_at_start_of_reset = GAMESTATE.power;
@@ -127,11 +140,13 @@ function storeLoopStartNumbersForNextGameOver() {
 // MARK: Tasks
 export function calcTaskCost(task) {
     const base_cost = 10;
-    const zone_exponent = 2.2;
+    const normal_exponent = 2.2;
+    const boss_exponent = 4;
+    const zone_exponent = task.task_definition.type == TaskType.Boss ? boss_exponent : normal_exponent;
     const zone_mult = Math.pow(zone_exponent, task.task_definition.zone_id);
     return base_cost * task.task_definition.cost_multiplier * zone_mult;
 }
-export function calcTaskProgressMultiplier(task, override_haste = null) {
+export function calcTaskProgressMultiplier(task, override_haste = null, override_lightning = null) {
     let mult = 1;
     let skill_level_mult = 1;
     for (const skill_type of task.task_definition.skills) {
@@ -156,12 +171,25 @@ export function calcTaskProgressMultiplier(task, override_haste = null) {
     if ((override_haste === null && task.hasted) || override_haste === true) {
         mult *= HASTE_MULT;
     }
+    if ((override_lightning === null && task.lightning) || override_lightning === true) {
+        mult *= BOTTLED_LIGHTNING_MULT;
+    }
     mult *= Math.pow(ZONE_SPEEDUP_BASE, task.task_definition.zone_id);
     if (hasPerk(PerkType.MajorTimeCompression)) {
         mult *= MAJOR_TIME_COMPRESSION_EFFECT;
     }
     if (hasPerk(PerkType.UnifiedTheoryOfMagic)) {
-        mult *= Math.pow(1.02, GAMESTATE.highest_zone_fully_completed + 1);
+        mult *= Math.pow(1 + UNIFIED_THEORY_OF_MAGIC_EFFECT, GAMESTATE.highest_zone_fully_completed + 1);
+    }
+    const mandatoryish = task.task_definition.type == TaskType.Travel || task.task_definition.type == TaskType.Mandatory || task.task_definition.type == TaskType.Prestige;
+    if (mandatoryish) {
+        mult *= 1 + getPrestigeRepeatableLevel(PrestigeRepeatableType.MandatorySchmandatory) * MANDATORY_SCHMANDATORY_MULT;
+        if (hasPrestigeUnlock(PrestigeUnlockType.DivineSupremacy)) {
+            mult *= FINAL_PRESTIGE_MULT;
+        }
+    }
+    if (hasPrestigeUnlock(PrestigeUnlockType.AmazingSpeed)) {
+        mult *= FINAL_PRESTIGE_MULT;
     }
     return mult * task_progress_mult;
 }
@@ -171,8 +199,8 @@ function calcTaskProgressPerTick(task) {
 export function calcTaskTicks(progress_per_tick, cost) {
     return Math.ceil(cost / progress_per_tick);
 }
-function calcTaskEnergyCost(task, hasted) {
-    const progress_per_tick = calcTaskProgressMultiplier(task, hasted);
+function calcTaskEnergyCost(task, hasted, lightning) {
+    const progress_per_tick = calcTaskProgressMultiplier(task, hasted, lightning);
     const cost = calcTaskCost(task);
     const energy_per_tick = calcEnergyDrainPerTick(task, isSingleTickTaskImpl(progress_per_tick, cost));
     const ticks = calcTaskTicks(progress_per_tick, cost);
@@ -220,7 +248,7 @@ function progressTask(task, progress, consume_energy = true) {
     }
     const fully_finished = task.reps == task.task_definition.max_reps;
     if (fully_finished) {
-        fullyFinishTask(task);
+        onFullyFinishTask(task);
     }
     updateEnabledTasks();
 }
@@ -229,6 +257,9 @@ function updateActiveTask() {
     if (!active_task) {
         GAMESTATE.active_task = pickNextTaskInAutomationQueue();
         active_task = GAMESTATE.active_task;
+        if (active_task && active_task.progress == 0) {
+            applyTaskRepStartEffects(active_task);
+        }
     }
     if (!active_task) {
         return;
@@ -246,11 +277,12 @@ function updateActiveTask() {
         GAMESTATE.active_task = null;
     }
     else if (!fully_finished) {
-        tryApplySingleRepEffects(active_task);
+        applyTaskRepStartEffects(active_task);
     }
     saveGame();
 }
-export function tryApplySingleRepEffects(task) {
+// Note that free executions don't call this
+export function applyTaskRepStartEffects(task) {
     if (GAMESTATE.queued_scrolls_of_haste > 0) {
         task.hasted = true;
         GAMESTATE.queued_scrolls_of_haste--;
@@ -259,6 +291,14 @@ export function tryApplySingleRepEffects(task) {
         task.xp_boosted = true;
         GAMESTATE.queued_magic_rings--;
     }
+    if (GAMESTATE.queued_lightning > 0 && task.task_definition.type == TaskType.Boss) {
+        task.lightning = true;
+        GAMESTATE.queued_lightning--;
+    }
+    if (task.task_definition.use_item != ItemType.Count) {
+        consumeItem(task.task_definition.use_item, 1);
+    }
+    task.progress = Math.max(task.progress, 0.01); // Slight progress to ensure it counts as started
 }
 export function clickTask(task) {
     if (GAMESTATE.active_task == task) {
@@ -266,10 +306,10 @@ export function clickTask(task) {
     }
     else {
         GAMESTATE.active_task = task;
-        tryApplySingleRepEffects(task);
+        applyTaskRepStartEffects(task);
     }
 }
-function fullyFinishTask(task) {
+function onFullyFinishTask(task) {
     if (task.task_definition.perk != PerkType.Count) {
         tryAddPerk(task.task_definition.perk);
     }
@@ -289,6 +329,13 @@ function fullyFinishTask(task) {
         GAMESTATE.prestige_available = true;
         const event = new RenderEvent(EventType.PrestigeAvailable, {});
         GAMESTATE.queueRenderEvent(event);
+    }
+}
+function doAllTaskRepsForFree(task) {
+    const consume_energy = false;
+    while (task.reps < task.task_definition.max_reps) {
+        progressTask(task, calcTaskCost(task), consume_energy);
+        // Deliberately doesn't call applyTaskRepStartEffects, we get to skip those
     }
 }
 function applyFinishTaskRepEffects(task) {
@@ -313,13 +360,36 @@ export function isTaskDisabledDueToTooStrongBoss(task) {
     if (task.task_definition.type != TaskType.Boss) {
         return false;
     }
-    return calcTaskEnergyCost(task, GAMESTATE.queued_scrolls_of_haste > 0) > (GAMESTATE.current_energy * BOSS_MAX_ENERGY_DISPARITY);
+    const lightning = GAMESTATE.queued_lightning > 0 && task.task_definition.type == TaskType.Boss;
+    return calcTaskEnergyCost(task, GAMESTATE.queued_scrolls_of_haste > 0, lightning) > (GAMESTATE.current_energy * BOSS_MAX_ENERGY_DISPARITY);
+}
+export function isTaskDisabledDueToMissingItem(task) {
+    if (isSingleTickTask(task)) {
+        return false; // If it is that cheap, we don't care about the item
+    }
+    if (task.progress > 0) {
+        return false;
+    }
+    if (task.task_definition.use_item == ItemType.Count) {
+        return false;
+    }
+    const item_count = GAMESTATE.items.get(task.task_definition.use_item) ?? 0;
+    return item_count <= 0;
+}
+export function isTaskDisabledWithoutBeingFinished(task) {
+    if (isTaskDisabledDueToTooStrongBoss(task)) {
+        return true;
+    }
+    if (isTaskDisabledDueToMissingItem(task)) {
+        return true;
+    }
+    return false;
 }
 function updateEnabledTasks() {
     let has_unfinished_mandatory_task = false;
     for (const task of GAMESTATE.tasks) {
         const finished = task.reps >= task.task_definition.max_reps;
-        task.enabled = !finished && !isTaskDisabledDueToTooStrongBoss(task);
+        task.enabled = !finished && !isTaskDisabledWithoutBeingFinished(task);
         has_unfinished_mandatory_task = has_unfinished_mandatory_task
             || (task.task_definition.type == TaskType.Mandatory && !finished)
             || (task.task_definition.type == TaskType.Prestige && !finished);
@@ -374,13 +444,45 @@ function unlockTask(task_id) {
     }
     const task = TASK_LOOKUP.get(task_id);
     GAMESTATE.unlocked_tasks.push(task_id);
-    GAMESTATE.tasks.push(new Task(task));
-    const context = { task_definition: task };
-    const event = new RenderEvent(EventType.UnlockedTask, context);
-    GAMESTATE.queueRenderEvent(event);
+    if (GAMESTATE.current_zone == task.zone_id) {
+        GAMESTATE.tasks.push(new Task(task));
+        const context = { task_definition: task };
+        const event = new RenderEvent(EventType.UnlockedTask, context);
+        GAMESTATE.queueRenderEvent(event);
+    }
 }
 function isTaskFullyCompleted(task) {
     return task.reps >= task.task_definition.max_reps;
+}
+function doMasteryOfTimeTaskCompletion() {
+    if (!hasPrestigeUnlock(PrestigeUnlockType.MasteryOfTime)) {
+        return;
+    }
+    if (GAMESTATE.is_in_zone_skip) {
+        // Gets handled at the end of the zone skipping so we don't spam unnecessary notifications
+        return;
+    }
+    let num_complete = 0;
+    for (const task of GAMESTATE.tasks) {
+        if (isTaskFullyCompleted(task)) {
+            continue;
+        }
+        // TODO - Ignore artifacts
+        if (!isSingleTickTask(task)) {
+            continue;
+        }
+        if (task.task_definition.type == TaskType.Travel) {
+            continue;
+        }
+        doAllTaskRepsForFree(task);
+        ++num_complete;
+    }
+    if (num_complete > 0) {
+        autoUseItems(); // Before the render event so the event's at the top
+        const context = { tasks: num_complete };
+        const event = new RenderEvent(EventType.SkippedTasks, context);
+        GAMESTATE.queueRenderEvent(event);
+    }
 }
 // MARK: Energy
 function modifyEnergy(delta) {
@@ -390,8 +492,16 @@ function modifyMaxEnergy(delta) {
     GAMESTATE.max_energy += delta;
     setTickRate();
 }
+export function calcReflectionsOnTheJourneyMult(zone) {
+    const zone_diff = GAMESTATE.highest_zone - zone;
+    const base = getReflectionsOnTheJourneyExponent();
+    return Math.pow(base, zone_diff);
+}
 export function calcEnergyDrainPerTick(task, is_single_tick) {
     let drain = 1;
+    if (is_single_tick && hasPrestigeUnlock(PrestigeUnlockType.MasteryOfTime)) {
+        return 0;
+    }
     if (is_single_tick && hasPerk(PerkType.MinorTimeCompression)) {
         drain *= 0.2;
     }
@@ -399,9 +509,7 @@ export function calcEnergyDrainPerTick(task, is_single_tick) {
         drain *= 0.8;
     }
     if (hasPerk(PerkType.ReflectionsOnTheJourney)) {
-        const zone_diff = GAMESTATE.highest_zone - task.task_definition.zone_id;
-        const base = hasPrestigeUnlock(PrestigeUnlockType.LookInTheMirror) ? REFLECTIONS_ON_THE_JOURNEY_BOOSTED_BASE : REFLECTIONS_ON_THE_JOURNEY_BASE;
-        drain *= Math.pow(base, zone_diff);
+        drain *= calcReflectionsOnTheJourneyMult(task.task_definition.zone_id);
     }
     drain *= Math.pow(ZONE_SPEEDUP_BASE, task.task_definition.zone_id);
     if (!is_single_tick && hasPerk(PerkType.MajorTimeCompression)) {
@@ -418,6 +526,7 @@ function doAnyReset() {
     GAMESTATE.automation_mode = AutomationMode.Off;
     GAMESTATE.queued_scrolls_of_haste = 0;
     GAMESTATE.queued_magic_rings = 0;
+    GAMESTATE.queued_lightning = 0;
     GAMESTATE.items_found_this_energy_reset = [];
     GAMESTATE.used_items.clear();
     removeTemporarySkillBonuses();
@@ -430,19 +539,27 @@ function calcEnergeticMemoryGain() {
     if (energy_gain > 1 && hasPrestigeUnlock(PrestigeUnlockType.TranscendantMemory)) {
         energy_gain *= energy_gain;
     }
+    const energized_level = getPrestigeRepeatableLevel(PrestigeRepeatableType.Energized);
+    energy_gain *= 1 + energized_level * ENERGIZED_PERK_INCREASE;
     return energy_gain;
 }
 export function doEnergyReset() {
     modifyMaxEnergy(calcEnergeticMemoryGain());
-    doAnyReset(); // Gotta be after the current_zone check
+    updatePrepRunHint(); // Needs to be before we reset the item use
+    doAnyReset(); // Gotta be after the current_zone check in calcEnergeticMemoryGain
     GAMESTATE.energy_reset_count += 1;
-    halveItemCounts();
+    handleEnergyResetItemCounts();
     storeLoopStartNumbersForNextGameOver();
     skipFreeZones();
     saveGame();
 }
 export function calcItemEnergyGain(base_energy) {
-    return base_energy * (1 + getPrestigeRepeatableLevel(PrestigeRepeatableType.DivineAppetite) * DIVINE_APPETITE_ENERGY_ITEM_BOOST_MULT);
+    let value = base_energy;
+    value *= (1 + getPrestigeRepeatableLevel(PrestigeRepeatableType.DivineAppetite) * DIVINE_APPETITE_ENERGY_ITEM_BOOST_MULT);
+    if (hasPerk(PerkType.SupplyLines)) {
+        value *= 1 + SUPPLY_LINES_EFFECT;
+    }
+    return Math.floor(value);
 }
 // MARK: Items
 export function addItem(item, count) {
@@ -454,12 +571,15 @@ export function addItem(item, count) {
     const event = new RenderEvent(EventType.GainedItem, {});
     GAMESTATE.queueRenderEvent(event);
 }
-function useItem(item, amount) {
+function consumeItem(item, amount) {
     const old_value = GAMESTATE.items.get(item) ?? 0;
+    GAMESTATE.items.set(item, old_value - amount);
+}
+function useItem(item, amount) {
+    consumeItem(item, amount);
     const old_use_value = GAMESTATE.used_items.get(item) ?? 0;
     const definition = ITEMS[item];
     definition.applyEffects(amount);
-    GAMESTATE.items.set(item, old_value - amount);
     GAMESTATE.used_items.set(item, old_use_value + amount);
     const context = { item: item, count: Math.abs(amount) };
     const event = new RenderEvent(amount > 0 ? EventType.UsedItem : EventType.UndidItem, context);
@@ -479,9 +599,16 @@ export function clickItem(item, use_all) {
     const num_used = use_all ? old_value : 1;
     useItem(item, num_used);
 }
-function halveItemCounts() {
+function handleEnergyResetItemCounts() {
     for (const [key, value] of GAMESTATE.items) {
-        GAMESTATE.items.set(key, Math.ceil(value / 2));
+        const new_value = hasPerk(PerkType.UnderstandingTheReset) ? Math.ceil(value / 2) : 0;
+        GAMESTATE.items.set(key, new_value);
+    }
+    if (hasPrestigeUnlock(PrestigeUnlockType.CompulsiveNotetaking)) {
+        for (const item of NOTE_ITEMS) {
+            const new_value = Math.max(GAMESTATE.items.get(item) ?? 0, COMPULSIVE_NOTE_TAKING_AMOUNT);
+            GAMESTATE.items.set(item, new_value);
+        }
     }
 }
 function autoUseItems() {
@@ -521,6 +648,26 @@ export function gatherItemBonuses(skill) {
     }
     return ret;
 }
+function updatePrepRunHint() {
+    if (!hasPerk(PerkType.UnderstandingTheReset)) {
+        return;
+    }
+    if (GAMESTATE.used_items.size == 0) {
+        GAMESTATE.hint_prep_runs_done++;
+    }
+    else {
+        GAMESTATE.hint_non_prep_runs_done++;
+    }
+}
+export function setHasGottenPrepRunHint() {
+    GAMESTATE.hint_has_gotten_prep_run_hint = true;
+}
+export function setHasGottenBossHint() {
+    GAMESTATE.hint_has_gotten_boss_hint = true;
+}
+export function knowsItem(item) {
+    return GAMESTATE.items.get(item) != null;
+}
 // MARK: Perks
 function tryAddPerk(perk, show_notification = true) {
     if (hasPerk(perk)) {
@@ -549,12 +696,9 @@ function skipCurrentZoneIfFree() {
     })) {
         return false;
     }
-    const consume_energy = false;
     // In reverse so travel happens last
     for (const task of GAMESTATE.tasks.slice().reverse()) {
-        while (task.reps < task.task_definition.max_reps) {
-            progressTask(task, calcTaskCost(task), consume_energy);
-        }
+        doAllTaskRepsForFree(task);
     }
     return true;
 }
@@ -562,12 +706,15 @@ function skipFreeZones() {
     if (!hasPerk(PerkType.MinorTimeCompression)) {
         return;
     }
+    GAMESTATE.is_in_zone_skip = true;
     while (skipCurrentZoneIfFree()) { /* Effect is in conditional */ }
     if (GAMESTATE.current_zone > 0) {
         autoUseItems(); // Do this first so our zone skip notification is at the top
         const event = new RenderEvent(EventType.SkippedZones, {});
         GAMESTATE.queueRenderEvent(event);
     }
+    GAMESTATE.is_in_zone_skip = false;
+    doMasteryOfTimeTaskCompletion();
 }
 export function gatherPerkBonuses(skill) {
     const ret = [];
@@ -596,9 +743,12 @@ export function calcPowerGain(task) {
     if (task.task_definition.type != TaskType.Boss) {
         return 0;
     }
-    const mult = task.task_definition.zone_id - 1; // First boss is zone 3, which is internally 2
+    const mult = Math.max(task.task_definition.zone_id - 1, 1); // First boss is zone 3, which is internally 2
     let powerAmount = 5 * mult;
     powerAmount *= Math.pow(2, getPrestigeRepeatableLevel(PrestigeRepeatableType.UnlimitedPower));
+    if (hasPrestigeUnlock(PrestigeUnlockType.LimitlessPower)) {
+        powerAmount *= FINAL_PRESTIGE_MULT;
+    }
     return powerAmount;
 }
 export function calcPowerSpeedBonusAtLevel(level) {
@@ -606,6 +756,9 @@ export function calcPowerSpeedBonusAtLevel(level) {
 }
 export function calcAttunementSpeedBonusAtLevel(level) {
     return 1 + level / 1000;
+}
+export function calcSpiteTheGodsBonus() {
+    return 1 + getPrestigeRepeatableLevel(PrestigeRepeatableType.SpiteTheGods) * SPITE_THE_GODS_MULT;
 }
 function addAttunement(amount) {
     GAMESTATE.attunement += amount;
@@ -625,17 +778,30 @@ export function calcAttunementGain(task) {
     if (hasPrestigeUnlock(PrestigeUnlockType.FullyAttuned)) {
         value *= 1 + getPrestigeRepeatableLevel(PrestigeRepeatableType.DivineKnowledge) * DIVINE_KNOWLEDGE_MULT;
     }
+    if (hasPerk(PerkType.CommunedWithDamnedSouls)) {
+        value *= 2;
+    }
+    if (hasPrestigeUnlock(PrestigeUnlockType.LimitlessPower)) {
+        value *= FINAL_PRESTIGE_MULT;
+    }
+    value *= Math.pow(DIVINE_ATTUNEMENT_BASE, getPrestigeRepeatableLevel(PrestigeRepeatableType.DivineAttunement));
     return value;
 }
 export function calcAttunementSkills() {
-    const attunement_skills = [SkillType.Druid, SkillType.Magic, SkillType.Study];
+    const attunement_skills = [SkillType.Magic, SkillType.Study];
     if (hasPrestigeUnlock(PrestigeUnlockType.FullyAttuned)) {
         attunement_skills.push(SkillType.Search);
+    }
+    if (hasPrestigeUnlock(PrestigeUnlockType.CraftingBreakthrough)) {
+        attunement_skills.push(SkillType.Crafting);
     }
     return attunement_skills;
 }
 export function getPowerSkills() {
     return [SkillType.Combat, SkillType.Fortitude];
+}
+export function getSpiteTheGodsSkills() {
+    return [SkillType.Ascension, SkillType.Charisma];
 }
 // MARK: Automation
 export var AutomationMode;
@@ -644,19 +810,26 @@ export var AutomationMode;
     AutomationMode[AutomationMode["Zone"] = 1] = "Zone";
     AutomationMode[AutomationMode["Off"] = 2] = "Off";
 })(AutomationMode || (AutomationMode = {}));
+function hasAutomatedTask(task) {
+    if (!GAMESTATE.automation_prios.has(task.zone_id)) {
+        return false;
+    }
+    const prios = GAMESTATE.automation_prios.get(task.zone_id);
+    return prios.includes(task.id);
+}
 export function toggleAutomation(task) {
-    if (!hasPerk(PerkType.Amulet)) {
+    if (!hasPerk(PerkType.Amulet) && !hasAutomatedTask(task)) {
         return;
     }
-    if (!GAMESTATE.automation_prios.has(task.task_definition.zone_id)) {
-        GAMESTATE.automation_prios.set(task.task_definition.zone_id, []);
+    if (!GAMESTATE.automation_prios.has(task.zone_id)) {
+        GAMESTATE.automation_prios.set(task.zone_id, []);
     }
-    const prios = GAMESTATE.automation_prios.get(task.task_definition.zone_id);
-    if (prios.includes(task.task_definition.id)) {
-        prios.splice(prios.indexOf(task.task_definition.id), 1);
+    const prios = GAMESTATE.automation_prios.get(task.zone_id);
+    if (prios.includes(task.id)) {
+        prios.splice(prios.indexOf(task.id), 1);
     }
     else {
-        prios.push(task.task_definition.id);
+        prios.push(task.id);
         // Ensure travel always happens last
         prios.sort((a, b) => {
             const task_a = TASK_LOOKUP.get(a);
@@ -681,8 +854,8 @@ function pickNextTaskInAutomationQueue() {
             if (task.task_definition.id != task_id) {
                 continue;
             }
-            if (isTaskDisabledDueToTooStrongBoss(task)) {
-                return null; // Better to stop automating than having it fuck up by skipping a boss
+            if (isTaskDisabledWithoutBeingFinished(task)) {
+                return null; // Better to stop automating than having it fuck up by skipping a Task
             }
             if (!task.enabled) {
                 break;
@@ -698,6 +871,12 @@ export function setAutomationMode(mode) {
         GAMESTATE.active_task = null;
     }
     GAMESTATE.automation_mode = mode;
+}
+export function setAutomationEndZone(zone) {
+    GAMESTATE.automation_end = zone;
+    if (GAMESTATE.automation_mode == AutomationMode.All && GAMESTATE.current_zone >= zone) {
+        setAutomationMode(AutomationMode.Off);
+    }
 }
 // MARK: Energy Reset
 export class EnergyResetInfo {
@@ -718,12 +897,12 @@ function checkEnergyReset() {
 }
 function populateEnergyResetInfo() {
     const info = new EnergyResetInfo();
-    for (let i = 0; i < SkillType.Count; i++) {
-        const current_level = getSkill(i).level;
-        const starting_level = GAMESTATE.skills_at_start_of_reset[i];
+    for (const skill of SKILLS) {
+        const current_level = getSkill(skill).level;
+        const starting_level = GAMESTATE.skills_at_start_of_reset[skill];
         const skill_diff = current_level - starting_level;
         if (skill_diff > 0) {
-            info.skill_gains.push([i, skill_diff]);
+            info.skill_gains.push([skill, skill_diff]);
         }
     }
     // Biggest gain first
@@ -739,36 +918,75 @@ function populateEnergyResetInfo() {
 export function hasUnlockedPrestige() {
     return GAMESTATE.prestige_available || GAMESTATE.prestige_count > 0;
 }
-export const PRESTIGE_GAIN_EXPONENT = 3;
-export const PRESTIGE_FULLY_COMPLETED_MULT = 3;
-export const PRESTIGE_GAIN_DIVISOR = 100;
+export const PRESTIGE_GAIN_EXPONENT = 2.0;
+export const BASE_PRESTIGE_GAIN = 100;
 export function getPrestigeGainExponent() {
-    return 3 + DIVINE_LIGHTNING_EXPONENT_INCREASE * getPrestigeRepeatableLevel(PrestigeRepeatableType.DivineLightning);
-}
-export function calcDivineSparkDivisor() {
-    let divisor = PRESTIGE_GAIN_DIVISOR;
-    if (hasPerk(PerkType.Awakening)) {
-        divisor /= 1 + AWAKENING_DIVINE_SPARK_MULT;
-    }
-    return divisor;
+    return PRESTIGE_GAIN_EXPONENT + DIVINE_LIGHTNING_EXPONENT_INCREASE * getPrestigeRepeatableLevel(PrestigeRepeatableType.DivineLightning);
 }
 export function calcDivineSparkGainFromHighestZone(zone) {
-    return Math.pow(zone + 1, getPrestigeGainExponent()) / calcDivineSparkDivisor();
-}
-export function calcDivineSparkGainFromHighestZoneFullyCompleted(zone) {
-    return Math.pow(zone + 1, getPrestigeGainExponent()) * PRESTIGE_FULLY_COMPLETED_MULT / calcDivineSparkDivisor();
+    const prestige_zone = 15 - 1; // Due to 0-indexing
+    const effective_zone = Math.max(0, zone - prestige_zone);
+    let gain_mult = Math.pow(getPrestigeGainExponent(), effective_zone);
+    if (hasPerk(PerkType.Awakening)) {
+        gain_mult *= 1 + AWAKENING_DIVINE_SPARK_MULT;
+    }
+    if (hasPerk(PerkType.DefiedTheGods)) {
+        gain_mult *= 1 + DEFIED_THE_GODS_SPARK_MULT;
+    }
+    if (hasPerk(PerkType.Ascended)) {
+        gain_mult *= 2;
+    }
+    if (hasPrestigeUnlock(PrestigeUnlockType.AmazingSpeed)) {
+        gain_mult *= 2;
+    }
+    if (hasPrestigeUnlock(PrestigeUnlockType.LimitlessPower)) {
+        gain_mult *= 2;
+    }
+    if (hasPrestigeUnlock(PrestigeUnlockType.UnparalleledLearning)) {
+        gain_mult *= 2;
+    }
+    if (hasPrestigeUnlock(PrestigeUnlockType.DivineSupremacy)) {
+        gain_mult *= 2;
+    }
+    return Math.ceil(gain_mult * BASE_PRESTIGE_GAIN);
 }
 export function calcDivineSparkGain() {
-    let gain = 0;
-    gain += calcDivineSparkGainFromHighestZone(GAMESTATE.highest_zone);
-    gain += calcDivineSparkGainFromHighestZoneFullyCompleted(GAMESTATE.highest_zone_fully_completed);
-    return Math.ceil(gain);
+    return calcDivineSparkGainFromHighestZone(GAMESTATE.highest_zone);
 }
 export function hasPrestigeUnlock(unlock) {
     return GAMESTATE.prestige_unlocks.includes(unlock);
 }
 export function getPrestigeRepeatableLevel(repeatable) {
     return GAMESTATE.prestige_repeatables.get(repeatable) ?? 0;
+}
+function applyPrestigeUnlockEffects(unlock, show_notification) {
+    if (unlock == PrestigeUnlockType.PermanentAutomation) {
+        tryAddPerk(PerkType.Amulet, show_notification);
+    }
+    else if (unlock == PrestigeUnlockType.LookInTheMirror) {
+        tryAddPerk(PerkType.ReflectionsOnTheJourney, show_notification);
+    }
+    else if (unlock == PrestigeUnlockType.FullyAttuned) {
+        tryAddPerk(PerkType.Attunement, show_notification);
+    }
+    else if (unlock == PrestigeUnlockType.TranscendantMemory) {
+        tryAddPerk(PerkType.EnergeticMemory, show_notification);
+    }
+    else if (unlock == PrestigeUnlockType.MasteryOfTime) {
+        tryAddPerk(PerkType.MinorTimeCompression, show_notification);
+        tryAddPerk(PerkType.MajorTimeCompression, show_notification);
+        doMasteryOfTimeTaskCompletion();
+    }
+    else if (unlock == PrestigeUnlockType.SeeBeyondTheVeil) {
+        unlockTask(17); // Secret Fishing Spot
+        unlockTask(28); // Training Dummy
+        unlockTask(88); // Train at every Guild
+        unlockTask(158); // Divine Notes
+        unlockTask(209); // Gaze Beyond the Veil
+    }
+    else if (unlock == PrestigeUnlockType.DivineSupremacy) {
+        GAMESTATE.max_energy += DIVINE_SUPREMACY_ENERGY;
+    }
 }
 export function addPrestigeUnlock(unlock) {
     if (hasPrestigeUnlock(unlock)) {
@@ -782,24 +1000,14 @@ export function addPrestigeUnlock(unlock) {
     }
     GAMESTATE.divine_spark -= definition.cost;
     GAMESTATE.prestige_unlocks.push(unlock);
-    if (unlock == PrestigeUnlockType.PermanentAutomation) {
-        tryAddPerk(PerkType.Amulet);
-    }
-    else if (unlock == PrestigeUnlockType.LookInTheMirror) {
-        tryAddPerk(PerkType.ReflectionsOnTheJourney);
-    }
-    else if (unlock == PrestigeUnlockType.FullyAttuned) {
-        tryAddPerk(PerkType.Attunement);
-    }
-    else if (unlock == PrestigeUnlockType.TranscendantMemory) {
-        tryAddPerk(PerkType.EnergeticMemory);
-    }
+    const show_notification = true;
+    applyPrestigeUnlockEffects(unlock, show_notification);
 }
 export function calcPrestigeRepeatableCost(repeatable) {
     const definition = PRESTIGE_REPEATABLES[repeatable];
     const current_level = getPrestigeRepeatableLevel(repeatable);
     const base_cost = definition.initial_cost;
-    return Math.floor(base_cost * Math.pow(definition.scaling_exponent, current_level));
+    return Math.ceil(base_cost * Math.pow(definition.scaling_exponent, current_level));
 }
 export function increasePrestigeRepeatableLevel(repeatable) {
     const cost = calcPrestigeRepeatableCost(repeatable);
@@ -824,30 +1032,27 @@ export function increasePrestigeRepeatableLevel(repeatable) {
 }
 function applyGameStartPrestigeEffects() {
     const show_notification = false;
-    if (hasPrestigeUnlock(PrestigeUnlockType.PermanentAutomation)) {
-        tryAddPerk(PerkType.Amulet, show_notification);
-    }
-    if (hasPrestigeUnlock(PrestigeUnlockType.LookInTheMirror)) {
-        tryAddPerk(PerkType.ReflectionsOnTheJourney, show_notification);
-    }
-    if (hasPrestigeUnlock(PrestigeUnlockType.FullyAttuned)) {
-        tryAddPerk(PerkType.Attunement, show_notification);
-    }
-    if (hasPrestigeUnlock(PrestigeUnlockType.TranscendantMemory)) {
-        tryAddPerk(PerkType.EnergeticMemory, show_notification);
+    // We set this so Mastery of Time doesn't trigger and cause notifications
+    GAMESTATE.is_in_zone_skip = true;
+    for (const unlock of GAMESTATE.prestige_unlocks) {
+        applyPrestigeUnlockEffects(unlock, show_notification);
     }
     const energy_boost = ENERGIZED_INCREASE * getPrestigeRepeatableLevel(PrestigeRepeatableType.Energized);
     modifyEnergy(energy_boost);
     modifyMaxEnergy(energy_boost);
+    skipFreeZones();
+    GAMESTATE.is_in_zone_skip = false;
+    doMasteryOfTimeTaskCompletion();
 }
 export function doPrestige() {
     doAnyReset();
     GAMESTATE.prestige_count++;
+    GAMESTATE.highest_prestige_zone = Math.max(GAMESTATE.highest_zone, GAMESTATE.highest_prestige_zone);
     GAMESTATE.divine_spark += calcDivineSparkGain();
     // Reset most game state
     GAMESTATE.unlocked_tasks = [];
     GAMESTATE.highest_zone = 0;
-    GAMESTATE.highest_zone_fully_completed = 0;
+    GAMESTATE.highest_zone_fully_completed = -1;
     initializeSkills();
     // We set these to false/zero rather than clearing it, so the player can still see everything they've unlocked in the past
     for (const perk of GAMESTATE.perks.keys()) {
@@ -856,6 +1061,8 @@ export function doPrestige() {
     for (const item of GAMESTATE.items.keys()) {
         GAMESTATE.items.set(item, 0);
     }
+    // Ensure we apply Compulsive Notetaking
+    handleEnergyResetItemCounts();
     GAMESTATE.energy_reset_info = new EnergyResetInfo();
     GAMESTATE.energy_reset_count = 0;
     GAMESTATE.max_energy = STARTING_ENERGY;
@@ -865,6 +1072,13 @@ export function doPrestige() {
     GAMESTATE.prestige_available = false;
     GAMESTATE.auto_use_items = false;
     GAMESTATE.unlocked_new_prestige_this_prestige = false;
+    if (!hasPrestigeUnlock(PrestigeUnlockType.SeeBeyondTheVeil)) {
+        for (const [, task] of TASK_LOOKUP) {
+            if (task.type == TaskType.Boss && hasAutomatedTask(task)) {
+                toggleAutomation(task);
+            }
+        }
+    }
     // Things not reset:
     // has_unlocked_power - No reason to hide that from the UI
     // unlocked_skills - No reason to hide that either
@@ -874,6 +1088,15 @@ export function doPrestige() {
     storeLoopStartNumbersForNextGameOver();
     setTickRate();
     saveGame();
+}
+export function calcPerkySpeedMultiplier() {
+    let unlocked_perks = 0;
+    for (const [, active] of GAMESTATE.perks) {
+        if (active) {
+            ++unlocked_perks;
+        }
+    }
+    return Math.pow(PERKY_BASE, unlocked_perks);
 }
 // MARK: Persistence
 export const SAVE_LOCATION = "incrementalGameSave";
@@ -941,6 +1164,18 @@ function loadGameFromData(data) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         GAMESTATE[key] = GAMESTATE[key] instanceof Map ? new Map(value) : value;
     });
+    // Get rid of any skills that no longer exist
+    GAMESTATE.unlocked_skills = GAMESTATE.unlocked_skills.filter((skill) => SKILLS.includes(skill));
+    for (const task of GAMESTATE.tasks) {
+        task.reps = Math.min(task.reps, task.task_definition.max_reps);
+    }
+    // At least not as inaccurate as shwoing these as 1/0
+    GAMESTATE.highest_zone_ever = Math.max(GAMESTATE.highest_zone, GAMESTATE.highest_zone_ever);
+    GAMESTATE.highest_zone_fully_completed_ever = Math.max(GAMESTATE.highest_zone_fully_completed, GAMESTATE.highest_zone_fully_completed_ever);
+    // We didn't use to track this, so let's get as close as we can
+    if (GAMESTATE.highest_prestige_zone == 0 && GAMESTATE.prestige_count > 0) {
+        GAMESTATE.highest_prestige_zone = GAMESTATE.highest_zone_ever;
+    }
 }
 // MARK: Gamestate
 export class Gamestate {
@@ -951,11 +1186,15 @@ export class Gamestate {
     current_zone = 0;
     highest_zone = 0;
     highest_zone_fully_completed = -1;
+    highest_zone_ever = 0;
+    highest_zone_fully_completed_ever = -1;
     repeat_tasks = true;
     automation_mode = AutomationMode.Off;
     automation_prios = new Map();
+    automation_end = 99;
     auto_use_items = false;
     undo_item = [ItemType.Count, 0];
+    manual_tooltips = false;
     skills_at_start_of_reset = [];
     power_at_start_of_reset = 0;
     attunement_at_start_of_reset = 0;
@@ -967,9 +1206,11 @@ export class Gamestate {
     used_items = new Map();
     queued_scrolls_of_haste = 0;
     queued_magic_rings = 0;
+    queued_lightning = 0;
     is_in_energy_reset = false;
     is_at_end_of_content = false;
     energy_reset_info = new EnergyResetInfo();
+    is_in_zone_skip = false;
     current_energy = STARTING_ENERGY;
     max_energy = STARTING_ENERGY;
     energy_reset_count = 0;
@@ -978,12 +1219,17 @@ export class Gamestate {
     attunement = 0;
     prestige_available = false;
     prestige_count = 0;
+    highest_prestige_zone = 0;
     unlocked_new_prestige_this_prestige = false;
     divine_spark = 0;
     prestige_unlocks = [];
     prestige_repeatables = new Map();
     prestige_layers_unlocked = [];
     pending_render_events = [];
+    hint_prep_runs_done = 0;
+    hint_non_prep_runs_done = 0; // Since unlocking prep runs
+    hint_has_gotten_prep_run_hint = false;
+    hint_has_gotten_boss_hint = false;
     start() {
         if (!loadGame()) {
             this.initialize();
@@ -1004,15 +1250,18 @@ export class Gamestate {
     }
 }
 function advanceZone() {
+    const new_zone = GAMESTATE.current_zone + 1;
     if (GAMESTATE.current_zone > GAMESTATE.highest_zone_fully_completed
         && GAMESTATE.tasks.every((task) => { return isTaskFullyCompleted(task); })) {
         GAMESTATE.highest_zone_fully_completed = GAMESTATE.current_zone;
+        GAMESTATE.highest_zone_fully_completed_ever = Math.max(GAMESTATE.highest_zone_fully_completed, GAMESTATE.highest_zone_fully_completed_ever);
         const context = { zone: GAMESTATE.current_zone };
         const event = new RenderEvent(EventType.NewHighestZoneFullyCompleted, context);
         GAMESTATE.queueRenderEvent(event);
     }
     if (GAMESTATE.current_zone >= GAMESTATE.highest_zone) {
-        GAMESTATE.highest_zone = GAMESTATE.current_zone + 1;
+        GAMESTATE.highest_zone = new_zone;
+        GAMESTATE.highest_zone_ever = Math.max(GAMESTATE.highest_zone, GAMESTATE.highest_zone_ever);
         const context = { zone: GAMESTATE.current_zone + 1 };
         const event = new RenderEvent(EventType.NewHighestZone, context);
         GAMESTATE.queueRenderEvent(event);
@@ -1020,13 +1269,17 @@ function advanceZone() {
     if (GAMESTATE.automation_mode == AutomationMode.Zone) {
         GAMESTATE.automation_mode = AutomationMode.Off;
     }
+    else if (GAMESTATE.automation_mode == AutomationMode.All && (new_zone + 1) >= GAMESTATE.automation_end) {
+        GAMESTATE.automation_mode = AutomationMode.Off;
+    }
     // Happens after the highest zone stuff, since we do want the user to get those effects at the end of content
-    if ((GAMESTATE.current_zone + 1) >= ZONES.length) {
+    if (new_zone >= ZONES.length) {
         GAMESTATE.is_at_end_of_content = true;
         return;
     }
-    GAMESTATE.current_zone += 1;
+    GAMESTATE.current_zone = new_zone;
     resetTasks();
+    doMasteryOfTimeTaskCompletion();
 }
 export function calcTickRate() {
     let tick_rate = DEFAULT_TICK_RATE;

@@ -7,14 +7,26 @@ export var SkillType;
     SkillType[SkillType["Search"] = 3] = "Search";
     SkillType[SkillType["Subterfuge"] = 4] = "Subterfuge";
     SkillType[SkillType["Crafting"] = 5] = "Crafting";
-    SkillType[SkillType["Survival"] = 6] = "Survival";
+    SkillType[SkillType["REMOVED"] = 6] = "REMOVED";
     SkillType[SkillType["Travel"] = 7] = "Travel";
     SkillType[SkillType["Magic"] = 8] = "Magic";
     SkillType[SkillType["Fortitude"] = 9] = "Fortitude";
-    SkillType[SkillType["Druid"] = 10] = "Druid";
+    SkillType[SkillType["REMOVED2"] = 10] = "REMOVED2";
     SkillType[SkillType["Ascension"] = 11] = "Ascension";
     SkillType[SkillType["Count"] = 12] = "Count";
 })(SkillType || (SkillType = {}));
+export const SKILLS = [
+    SkillType.Charisma,
+    SkillType.Study,
+    SkillType.Combat,
+    SkillType.Search,
+    SkillType.Subterfuge,
+    SkillType.Crafting,
+    SkillType.Travel,
+    SkillType.Magic,
+    SkillType.Fortitude,
+    SkillType.Ascension,
+];
 export class SkillDefinition {
     type = SkillType.Count;
     name = "";
@@ -31,11 +43,11 @@ export const SKILL_DEFINITIONS = [
     new SkillDefinition({ type: SkillType.Search, name: "Search", icon: "🔎" }),
     new SkillDefinition({ type: SkillType.Subterfuge, name: "Subterfuge", icon: "🗡️" }),
     new SkillDefinition({ type: SkillType.Crafting, name: "Crafting", icon: "🔨" }),
-    new SkillDefinition({ type: SkillType.Survival, name: "Survival", icon: "⛺" }),
+    new SkillDefinition({ type: SkillType.REMOVED, name: "REMOVED", icon: "⁉" }),
     new SkillDefinition({ type: SkillType.Travel, name: "Travel", icon: TRAVEL_EMOJI }),
     new SkillDefinition({ type: SkillType.Magic, name: "Magic", icon: "🔮", xp_needed_mult: 3 }),
-    new SkillDefinition({ type: SkillType.Fortitude, name: "Fortitude", icon: "🛡️", xp_needed_mult: 10 }),
-    new SkillDefinition({ type: SkillType.Druid, name: "Druid", icon: "🐻", xp_needed_mult: 20 }),
-    new SkillDefinition({ type: SkillType.Ascension, name: "Ascension", icon: "🙏", xp_needed_mult: 1000 }),
+    new SkillDefinition({ type: SkillType.Fortitude, name: "Fortitude", icon: "🛡️", xp_needed_mult: 5 }),
+    new SkillDefinition({ type: SkillType.REMOVED2, name: "REMOVED", icon: "⁉" }),
+    new SkillDefinition({ type: SkillType.Ascension, name: "Ascension", icon: "🙏", xp_needed_mult: 200 }),
 ];
 //# sourceMappingURL=skills.js.map

@@ -1,18 +1,156 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, PRESTIGE_FULLY_COMPLETED_MULT, calcDivineSparkGain, calcDivineSparkGainFromHighestZoneFullyCompleted, calcDivineSparkGainFromHighestZone, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcDivineSparkDivisor, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION } from "./simulation.js";
-import { GAMESTATE, RENDERING } from "./game.js";
-import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT } from "./items.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus } from "./simulation.js";
+import { GAMESTATE, RENDERING, resetSave } from "./game.js";
+import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
-import { EventType, GainedPerkContext, HighestZoneContext, RenderEvent, SkillUpContext, UnlockedSkillContext, UnlockedTaskContext, UsedItemContext } from "./events.js";
+import { EventType, GainedPerkContext, HighestZoneContext, RenderEvent, SkillUpContext, SkippedTasksContext, UnlockedSkillContext, UnlockedTaskContext, UsedItemContext } from "./events.js";
 import { SKILL_DEFINITIONS, SkillDefinition, SkillType } from "./skills.js";
-import { ATTUNEMENT_TEXT, DIVINE_SPARK_TEXT, ENERGY_TEXT, HASTE_TEXT, POWER_TEXT, TRAVEL_EMOJI, XP_TEXT } from "./rendering_constants.js";
-import { PRESTIGE_UNLOCKABLES, PRESTIGE_REPEATABLES, PrestigeRepeatableType, DIVINE_KNOWLEDGE_MULT, DIVINE_APPETITE_ENERGY_ITEM_BOOST_MULT, GOTTA_GO_FAST_BASE, DIVINE_LIGHTNING_EXPONENT_INCREASE, TRANSCENDANT_APTITUDE_MULT, ENERGIZED_INCREASE } from "./prestige_upgrades.js";
+import { ATTUNEMENT_TEXT, BOTTLED_LIGHTNING_TEXT, DIVINE_SPARK_TEXT, ENERGY_TEXT, HASTE_TEXT, POWER_TEXT, TRAVEL_EMOJI, XP_TEXT } from "./rendering_constants.js";
+import { PRESTIGE_UNLOCKABLES, PRESTIGE_REPEATABLES, PrestigeRepeatableType, DIVINE_KNOWLEDGE_MULT, DIVINE_APPETITE_ENERGY_ITEM_BOOST_MULT, GOTTA_GO_FAST_BASE, DIVINE_LIGHTNING_EXPONENT_INCREASE, TRANSCENDANT_APTITUDE_MULT, ENERGIZED_INCREASE, DEENERGIZED_BASE, PrestigeUnlockType, ENERGIZED_PERK_INCREASE, MANDATORY_SCHMANDATORY_MULT, DIVINE_ATTUNEMENT_BASE, DIVINER_KNOWLEDGE_MULT, GODLY_TRAVEL_MULT } from "./prestige_upgrades.js";
 import { CHANGELOG } from "./changelog.js";
+import { CREDITS } from "./credits.js";
+import { AWAKENING_DIVINE_SPARK_MULT, DEFIED_THE_GODS_SPARK_MULT } from "./simulation_constants.js";
 // MARK: Helpers
 function createChildElement(parent, child_type) {
     const child = document.createElement(child_type);
     parent.appendChild(child);
     return child;
+}
+function createNumericInput(parent, options) {
+    const { min = 1, max = 99, step = 1, largeStep = 10, initialValue, onChange, ariaLabel } = options;
+    const wrapper = createChildElement(parent, "div");
+    wrapper.className = "numeric-input-wrapper";
+    const input = createChildElement(wrapper, "input");
+    input.className = "numeric-input";
+    input.type = "number";
+    input.value = `${initialValue}`;
+    input.min = `${min}`;
+    input.max = `${max}`;
+    if (ariaLabel) {
+        input.setAttribute("aria-label", ariaLabel);
+    }
+    const buttons_container = createChildElement(wrapper, "div");
+    buttons_container.className = "numeric-input-buttons";
+    const increment_button = createChildElement(buttons_container, "button");
+    increment_button.className = "numeric-input-button numeric-input-increment";
+    increment_button.type = "button";
+    increment_button.setAttribute("aria-label", "Increment");
+    const decrement_button = createChildElement(buttons_container, "button");
+    decrement_button.className = "numeric-input-button numeric-input-decrement";
+    decrement_button.type = "button";
+    decrement_button.setAttribute("aria-label", "Decrement");
+    function clampValue(value) {
+        if (isNaN(value))
+            return min;
+        return Math.max(min, Math.min(max, value));
+    }
+    function updateButtonStates() {
+        const current = getCurrentValue();
+        decrement_button.classList.toggle("disabled", current <= min);
+        increment_button.classList.toggle("disabled", current >= max);
+    }
+    function updateValue(newValue) {
+        const clamped = clampValue(newValue);
+        input.value = `${clamped}`;
+        updateButtonStates();
+        onChange(clamped);
+    }
+    function getCurrentValue() {
+        return parseInt(input.value) || min;
+    }
+    updateButtonStates();
+    decrement_button.addEventListener("click", () => {
+        updateValue(getCurrentValue() - step);
+    });
+    increment_button.addEventListener("click", () => {
+        updateValue(getCurrentValue() + step);
+    });
+    // Hold-to-repeat functionality
+    let hold_timeout = null;
+    let hold_interval = null;
+    const HOLD_DELAY = 400;
+    const HOLD_REPEAT = 80;
+    function startHold(delta) {
+        stopHold();
+        hold_timeout = window.setTimeout(() => {
+            hold_interval = window.setInterval(() => {
+                updateValue(getCurrentValue() + delta);
+            }, HOLD_REPEAT);
+        }, HOLD_DELAY);
+    }
+    function stopHold() {
+        if (hold_timeout) {
+            clearTimeout(hold_timeout);
+            hold_timeout = null;
+        }
+        if (hold_interval) {
+            clearInterval(hold_interval);
+            hold_interval = null;
+        }
+    }
+    decrement_button.addEventListener("mousedown", () => startHold(-step));
+    increment_button.addEventListener("mousedown", () => startHold(step));
+    // Document-level mouseup to catch releases anywhere
+    document.addEventListener("mouseup", stopHold);
+    // Keyboard support
+    input.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowUp") {
+            event.preventDefault();
+            updateValue(getCurrentValue() + step);
+        }
+        else if (event.key === "ArrowDown") {
+            event.preventDefault();
+            updateValue(getCurrentValue() - step);
+        }
+        else if (event.key === "PageUp") {
+            event.preventDefault();
+            updateValue(getCurrentValue() + largeStep);
+        }
+        else if (event.key === "PageDown") {
+            event.preventDefault();
+            updateValue(getCurrentValue() - largeStep);
+        }
+        else if (event.key === "Enter") {
+            updateValue(getCurrentValue());
+            input.blur();
+        }
+    });
+    // Wheel handler for when focused (works anywhere on page)
+    function handleWheelFocused(event) {
+        if (document.activeElement !== input)
+            return;
+        event.preventDefault();
+        const delta = event.deltaY < 0 ? step : -step;
+        updateValue(getCurrentValue() + delta);
+    }
+    // Wheel handler for when hovering (works on the wrapper)
+    function handleWheelHover(event) {
+        if (document.activeElement === input)
+            return; // Don't double-handle if focused
+        event.preventDefault();
+        const delta = event.deltaY < 0 ? step : -step;
+        updateValue(getCurrentValue() + delta);
+    }
+    // Hover-to-scroll: works when hovering over the input
+    wrapper.addEventListener("wheel", handleWheelHover, { passive: false });
+    // Focus-to-scroll: works anywhere when input is focused
+    function handleFocus() {
+        input.select();
+        document.addEventListener("wheel", handleWheelFocused, { passive: false });
+    }
+    function handleFocusOut() {
+        updateValue(getCurrentValue());
+        document.removeEventListener("wheel", handleWheelFocused);
+    }
+    input.addEventListener("focus", handleFocus);
+    input.addEventListener("focusout", handleFocusOut);
+    // Cleanup function to remove all document-level listeners
+    function destroy() {
+        document.removeEventListener("mouseup", stopHold);
+        document.removeEventListener("wheel", handleWheelFocused);
+        stopHold();
+    }
+    return { input, destroy };
 }
 export function joinWithCommasAndAnd(strings) {
     if (strings.length === 0)
@@ -30,8 +168,8 @@ function createConfirmationOverlay(header_text, description_text, on_confirm) {
     overlay.innerHTML = "";
     const div = createChildElement(overlay, "div");
     div.className = "overlay-box confirmation";
-    createChildElement(div, "h1").textContent = header_text;
-    createChildElement(div, "p").textContent = description_text;
+    createChildElement(div, "h1").innerHTML = header_text;
+    createChildElement(div, "p").innerHTML = description_text;
     const confirmation_buttons_div = createChildElement(div, "div");
     confirmation_buttons_div.className = "confirmation-buttons";
     const confirm_button = createChildElement(confirmation_buttons_div, "button");
@@ -150,6 +288,17 @@ function calcTotalSkillXp(task, completions) {
     xp += xp_per_completion * boost_completions;
     return xp;
 }
+function calcLevelsGained(type, xp_gained) {
+    const skill_progress = getSkill(type);
+    let resulting_level = skill_progress.level;
+    let xp_needed = calcSkillXpNeeded(skill_progress) - skill_progress.progress;
+    while (xp_gained > xp_needed) {
+        xp_gained -= xp_needed;
+        resulting_level += 1;
+        xp_needed = calcSkillXpNeededAtLevel(resulting_level, type);
+    }
+    return resulting_level - skill_progress.level;
+}
 // MARK: Tasks
 const TASK_TYPE_NAMES = ["Normal", "Travel", "Mandatory", "Prestige", "Boss"];
 function createTaskDiv(task, tasks_div, rendering) {
@@ -160,7 +309,6 @@ function createTaskDiv(task, tasks_div, rendering) {
     task_upper_div.className = "task-upper";
     const task_button = document.createElement("button");
     task_button.className = "task-button";
-    task_button.textContent = `${task.task_definition.name}`;
     task_button.addEventListener("click", () => {
         // We do this just via classes rather than the disabled propery
         // As Firefox would also disable right-clicking otherwise
@@ -168,8 +316,11 @@ function createTaskDiv(task, tasks_div, rendering) {
             clickTask(task);
         }
     });
-    task_button.addEventListener("contextmenu", (e) => { e.preventDefault(); toggleAutomation(task); });
-    if (task.task_definition.type == TaskType.Prestige && !GAMESTATE.prestige_available) {
+    task_button.addEventListener("contextmenu", (e) => { e.preventDefault(); toggleAutomation(task.task_definition); });
+    const task_button_text = createChildElement(task_button, "span");
+    task_button_text.textContent = task.task_definition.name;
+    task_button_text.className = "task-button-text";
+    if (task.task_definition.type == TaskType.Prestige && !GAMESTATE.prestige_layers_unlocked.includes(task.task_definition.prestige_layer)) {
         task_button.classList.add("prestige-glow");
     }
     const task_automation = document.createElement("div");
@@ -204,7 +355,12 @@ function createTaskDiv(task, tasks_div, rendering) {
         perk_indicator.classList.add("indicator");
         perk_indicator.textContent = PERKS[task.task_definition.perk].icon;
         task_button.appendChild(perk_indicator);
-        task_button.classList.add("perk-unlock");
+        task_button.classList.add("unlock");
+    }
+    if (ARTIFACTS.includes(task.task_definition.item)) {
+        if (!knowsItem(task.task_definition.item)) {
+            task_button.classList.add("unlock");
+        }
     }
     const task_reps_div = document.createElement("div");
     task_reps_div.className = "task-reps";
@@ -234,6 +390,9 @@ function createTaskDiv(task, tasks_div, rendering) {
             else if (isTaskDisabledDueToTooStrongBoss(task)) {
                 tooltip += `<p class="disable-reason">Disabled due to this Boss requiring more than ${BOSS_MAX_ENERGY_DISPARITY}x your current ${ENERGY_TEXT}</p>`;
             }
+            else if (isTaskDisabledDueToMissingItem(task)) {
+                tooltip += `<p class="disable-reason">Disabled due to this requiring a ${getItemNameWithIcon(task.task_definition.use_item)} Item</p>`;
+            }
             else {
                 console.error("Task disabled for unknown reason");
             }
@@ -242,13 +401,16 @@ function createTaskDiv(task, tasks_div, rendering) {
         task_table.className = "table simple-table";
         let asterisk_count = 0;
         let perk_asterisk_index = -1;
+        let partial_skill_gain_asterisk_index = -1;
+        let haste_asterisk_index = -1;
+        let magic_ring_asterisk_index = -1;
         const remaining_completions = (task.reps == task.task_definition.max_reps) ? task.task_definition.max_reps : (task.task_definition.max_reps - task.reps);
         const single_rep_for_all_ticks = willCompleteAllRepsInOneTick(task);
         const completions = (GAMESTATE.repeat_tasks || single_rep_for_all_ticks) ? remaining_completions : 1;
-        let haste_asterisk_index = -1;
+        const expected_completions = calcExpectedCompletions(task, completions);
         const haste_stacks = task.hasted ? GAMESTATE.queued_scrolls_of_haste + 1 : GAMESTATE.queued_scrolls_of_haste;
-        let magic_ring_asterisk_index = -1;
         const magic_ring_stacks = task.xp_boosted ? GAMESTATE.queued_magic_rings + 1 : GAMESTATE.queued_magic_rings;
+        const lightning_stacks = task.lightning ? GAMESTATE.queued_lightning + 1 : GAMESTATE.queued_lightning;
         if (task.task_definition.max_reps > 1) {
             const table = createTableSection(task_table, "Completions");
             createTwoElementRow(table, "", `${completions}`);
@@ -265,60 +427,71 @@ function createTaskDiv(task, tasks_div, rendering) {
                 createTwoElementRow(getOrCreateTable(), `${TRAVEL_EMOJI}Move to Zone`, `${task.task_definition.zone_id + 2}`);
             }
             if (task.task_definition.item != ItemType.Count) {
-                const item = ITEMS[task.task_definition.item];
                 const plural = completions > 1;
-                createTwoElementRow(getOrCreateTable(), `${item.icon}${item.name} ${plural ? "Items" : "Items"}`, `${completions}`);
+                createTwoElementRow(getOrCreateTable(), `${getItemNameWithIcon(task.task_definition.item)} ${plural ? "Items" : "Item"}`, `${completions}`);
             }
             if (task.task_definition.perk != PerkType.Count && !hasPerk(task.task_definition.perk)) {
                 const perk = PERKS[task.task_definition.perk];
                 const is_last_rep = (task.reps + completions) == task.task_definition.max_reps;
                 if (!is_last_rep) {
-                    ++asterisk_count;
-                    perk_asterisk_index = asterisk_count;
+                    perk_asterisk_index = ++asterisk_count;
                 }
                 createTwoElementRow(getOrCreateTable(), `${perk.icon}${knowsPerk(perk.enum) ? perk.name : "Mystery"} Perk`, is_last_rep ? `1` : `0${"*".repeat(perk_asterisk_index)}`);
             }
             const attunement_gain = completions * calcAttunementGain(task);
             if (attunement_gain > 0) {
-                createTwoElementRow(getOrCreateTable(), `🌀Attunement`, `${attunement_gain}`);
+                createTwoElementRow(getOrCreateTable(), `🌀Attunement`, `${formatInt(attunement_gain)}`);
             }
             const power_gain = completions * calcPowerGain(task);
             if (power_gain > 0 && GAMESTATE.has_unlocked_power) {
-                createTwoElementRow(getOrCreateTable(), `💪Power`, `${power_gain}`);
+                createTwoElementRow(getOrCreateTable(), `💪Power`, `${formatInt(power_gain)}`);
             }
         }
         {
-            const table = createTableSection(task_table, "Skill Gains");
+            let skill_gain_text = "Skill Gains";
+            if (completions != expected_completions) {
+                partial_skill_gain_asterisk_index = ++asterisk_count;
+                skill_gain_text += "*".repeat(partial_skill_gain_asterisk_index);
+            }
+            const table = createTableSection(task_table, skill_gain_text);
+            const xp_gained = calcTotalSkillXp(task, completions);
+            const xp_gained_before_energy_runs_out = calcTotalSkillXp(task, expected_completions);
             for (const skill of task.task_definition.skills) {
                 const skill_progress = getSkill(skill);
                 const skill_definition = SKILL_DEFINITIONS[skill];
-                let xp_gained = calcTotalSkillXp(task, completions);
-                let resulting_level = skill_progress.level;
-                let xp_needed = calcSkillXpNeeded(skill_progress) - skill_progress.progress;
-                while (xp_gained > xp_needed) {
-                    xp_gained -= xp_needed;
-                    resulting_level += 1;
-                    xp_needed = calcSkillXpNeededAtLevel(resulting_level, skill);
-                }
                 let levels = ``;
-                const levels_diff = resulting_level - skill_progress.level;
-                if (levels_diff > 0) {
-                    levels = `${resulting_level - skill_progress.level}`;
-                }
-                else {
-                    const level_percentage = xp_gained / calcSkillXpNeeded(skill_progress);
-                    if (level_percentage < 0.01) {
-                        levels = `<0.01`;
+                const levels_diff = calcLevelsGained(skill, xp_gained);
+                const expected_levels_diff = calcLevelsGained(skill, xp_gained_before_energy_runs_out);
+                if (levels_diff == expected_levels_diff) {
+                    if (levels_diff > 0) {
+                        levels = `${levels_diff}`;
                     }
                     else {
-                        levels = `${formatNumber(level_percentage)}`;
+                        const level_percentage = xp_gained / calcSkillXpNeeded(skill_progress);
+                        if (level_percentage < 0.01) {
+                            levels = `<0.01`;
+                        }
+                        else if (completions == expected_completions) {
+                            levels = `${formatNumber(level_percentage)}`;
+                        }
+                        else {
+                            const expected_level_percentage = xp_gained_before_energy_runs_out / calcSkillXpNeeded(skill_progress);
+                            levels = `${formatNumber(expected_level_percentage)}-${formatNumber(level_percentage)}`;
+                        }
                     }
+                }
+                else {
+                    levels = `${expected_levels_diff}-${levels_diff}`;
                 }
                 createTwoElementRow(table, `${skill_definition.icon}${skill_definition.name}`, levels);
             }
         }
         {
             const table = createTableSection(task_table, "Cost Estimate");
+            if (task.task_definition.use_item != ItemType.Count) {
+                const plural = completions > 1;
+                createTwoElementRow(table, `${getItemNameWithIcon(task.task_definition.use_item)} ${plural ? "Items" : "Item"}`, `${completions}`);
+            }
             const energy_cost = estimateTotalTaskEnergyConsumption(task, completions);
             const energy_cost_ratio = energy_cost / GAMESTATE.current_energy;
             let energy_cost_class = "";
@@ -340,7 +513,7 @@ function createTaskDiv(task, tasks_div, rendering) {
             else {
                 energy_cost_class = "extreme";
             }
-            const energy_cost_text = `<span class="${energy_cost_class}">${formatNumber(energy_cost)}</span>`;
+            const energy_cost_text = `<span class="${energy_cost_class}">${formatNumber(energy_cost, energy_cost > 0)}</span>`;
             createTwoElementRow(table, ENERGY_TEXT, `${energy_cost_text}`);
             const task_ticks = estimateTotalTaskTicks(task, completions);
             if (task_ticks > completions) {
@@ -365,6 +538,9 @@ function createTaskDiv(task, tasks_div, rendering) {
                 }
                 createTwoElementRow(getOrCreateTable(), `${HASTE_TEXT}${needs_asterisk ? "*".repeat(haste_asterisk_index) : ""}`, `<span class="good">x${HASTE_MULT}</span>`);
             }
+            if (lightning_stacks > 0 && task.task_definition.type == TaskType.Boss) {
+                createTwoElementRow(getOrCreateTable(), BOTTLED_LIGHTNING_TEXT, `<span class="good">x${BOTTLED_LIGHTNING_MULT}</span>`);
+            }
             if (magic_ring_stacks > 0) {
                 const needs_asterisk = magic_ring_stacks < completions && !single_rep_for_all_ticks;
                 if (needs_asterisk) {
@@ -376,6 +552,9 @@ function createTaskDiv(task, tasks_div, rendering) {
         tooltip += task_table.outerHTML;
         if (perk_asterisk_index >= 0) {
             tooltip += `<p class="tooltip-asterisk">${"*".repeat(perk_asterisk_index)} Perk is only gained on completing all Reps of the Task</p>`;
+        }
+        if (partial_skill_gain_asterisk_index >= 0) {
+            tooltip += `<p class="tooltip-asterisk">${"*".repeat(partial_skill_gain_asterisk_index)} Skill gain as range since you're expected to run out of ${ENERGY_TEXT} before fully completing this Task</p>`;
         }
         if (haste_asterisk_index >= 0) {
             tooltip += `<p class="tooltip-asterisk">${"*".repeat(haste_asterisk_index)} Haste will only apply to the first ${haste_stacks} reps</p>`;
@@ -404,6 +583,14 @@ function updateTaskRendering() {
         const button = task_element.querySelector(".task-button");
         if (button) {
             button.classList.toggle("disabled", !task.enabled);
+            const disabled_with_reason = !task.enabled && isTaskDisabledWithoutBeingFinished(task);
+            const button_text = task_element.querySelector(".task-button-text");
+            if (button_text) {
+                button_text.textContent = (disabled_with_reason ? `🚫` : ``) + task.task_definition.name;
+            }
+            else {
+                console.error("No task-button-text");
+            }
         }
         else {
             console.error("No task-button");
@@ -431,22 +618,42 @@ function updateTaskRendering() {
         }
     }
 }
-function estimateTotalTaskTicks(task, completions) {
-    if (willCompleteAllRepsInOneTick(task)) {
-        return 1; // Major Time Compression combines all single-tick reps
+function calcExpectedCompletions(task, desired_completions) {
+    const { normal, haste, haste_completions } = calcSplitTotalTaskTicks(task, desired_completions);
+    const cost_per_tick = calcEnergyDrainPerTick(task, (normal + haste) <= desired_completions);
+    let remaining_energy = GAMESTATE.current_energy;
+    const haste_cost = haste * cost_per_tick;
+    const normal_cost = normal * cost_per_tick;
+    if (haste_cost + normal_cost <= remaining_energy) {
+        return desired_completions;
     }
+    const actual_haste_completions = Math.min(remaining_energy / haste_cost, 1) * haste_completions;
+    if (actual_haste_completions < haste_completions) {
+        return actual_haste_completions;
+    }
+    remaining_energy -= haste_cost;
+    return haste_completions + Math.min(remaining_energy / normal_cost, 1) * (desired_completions - haste_completions);
+}
+function calcSplitTotalTaskTicks(task, completions) {
+    if (willCompleteAllRepsInOneTick(task)) {
+        return { normal: 1, haste: 0, haste_completions: 0 }; // Major Time Compression combines all single-tick reps
+    }
+    const lightning = task.lightning || (GAMESTATE.queued_lightning > 0 && task.task_definition.type == TaskType.Boss);
+    let progress_mult = calcTaskProgressMultiplier(task, false, lightning);
     let haste_stacks = GAMESTATE.queued_scrolls_of_haste;
     if (task.hasted) {
         haste_stacks += 1;
     }
     const haste_completions = Math.min(completions, haste_stacks);
-    const non_haste_completion = completions - haste_completions;
-    let num_ticks = 0;
-    let progress_mult = calcTaskProgressMultiplier(task, false);
-    num_ticks += Math.ceil(calcTaskCost(task) / progress_mult) * non_haste_completion;
+    const non_haste_completions = completions - haste_completions;
+    const normal_ticks = Math.ceil(calcTaskCost(task) / progress_mult) * non_haste_completions;
     progress_mult *= HASTE_MULT;
-    num_ticks += Math.ceil(calcTaskCost(task) / progress_mult) * haste_completions;
-    return num_ticks;
+    const haste_ticks = Math.ceil(calcTaskCost(task) / progress_mult) * haste_completions;
+    return { normal: normal_ticks, haste: haste_ticks, haste_completions: haste_completions };
+}
+function estimateTotalTaskTicks(task, completions) {
+    const { normal, haste } = calcSplitTotalTaskTicks(task, completions);
+    return normal + haste;
 }
 function estimateTaskTimeInSeconds(task, completions) {
     return estimateTotalTaskTicks(task, completions) * calcTickRate() / 1000;
@@ -477,11 +684,15 @@ function estimateTotalTaskEnergyConsumption(task, completions) {
 function setupTooltip(element, header_callback, body_callback) {
     element.generateTooltipHeader = header_callback;
     element.generateTooltipBody = body_callback;
-    element.addEventListener("pointerenter", () => {
-        showTooltip(element);
+    element.addEventListener("pointerenter", (event) => {
+        RENDERING.potential_tooltipped_element = element;
+        if (!GAMESTATE.manual_tooltips || event.ctrlKey) {
+            showTooltip(element);
+        }
     });
     element.addEventListener("pointerleave", () => {
         hideTooltip();
+        RENDERING.potential_tooltipped_element = null;
     });
 }
 function setupTooltipStaticHeader(element, header, body_callback) {
@@ -507,7 +718,7 @@ function setupInfoTooltips() {
         createThreeElementRow(table, "<h3>Skill</h3>", "<h3>Item(s)</h3>", "<h3>Bonus</h3>");
         for (const skill_type of GAMESTATE.unlocked_skills) {
             const skill = getSkill(skill_type);
-            if (skill.speed_modifier <= 0) {
+            if (skill.speed_modifier <= 1) {
                 continue;
             }
             let items_string = "";
@@ -515,7 +726,7 @@ function setupInfoTooltips() {
             for (const [item_type,] of item_bonuses) {
                 items_string += ITEMS[item_type]?.icon;
             }
-            createThreeElementRow(table, getSkillString(skill_type), items_string, `+${formatNumber(skill.speed_modifier * 100, false)}%`);
+            createThreeElementRow(table, getSkillString(skill_type), items_string, `+${formatPercentage((skill.speed_modifier - 1))}`);
         }
         if (table.children.length == 1) {
             tooltip += "<br>None";
@@ -534,6 +745,7 @@ function setupInfoTooltips() {
         let tooltip = `Artifacts are special Items with powerful single-use effects`;
         tooltip += `<br>The effects apply to just a single rep of the next Task started`;
         tooltip += `<br>They otherwise behave identically to other Items`;
+        tooltip += `<br>That includes keeping half after ${ENERGY_TEXT} resets`;
         return tooltip;
     });
     const perk_info = document.querySelector("#perks .section-info");
@@ -547,7 +759,7 @@ function setupInfoTooltips() {
         tooltip += `<br><br>Current Skill bonuses:`;
         const table = document.createElement("table");
         table.className = "table simple-table";
-        createThreeElementRow(table, "<h3>Skill</h3>", "<h3>Item(s)</h3>", "<h3>Bonus</h3>");
+        createThreeElementRow(table, "<h3>Skill</h3>", "<h3>Perk(s)</h3>", "<h3>Bonus</h3>");
         for (const skill_type of GAMESTATE.unlocked_skills) {
             const perk_bonuses = gatherPerkBonuses(skill_type);
             if (perk_bonuses.length <= 0) {
@@ -587,7 +799,7 @@ function createItemDiv(item, items_div) {
     count_text.className = "item-count";
     button.addEventListener("click", () => { clickItem(item, false); });
     button.addEventListener("contextmenu", (e) => { e.preventDefault(); clickItem(item, true); });
-    setupTooltipStatic(button, `${item_definition.name}`, `${item_definition.getTooltip()}`);
+    setupTooltipStaticHeader(button, `${item_definition.name}`, () => `${item_definition.getTooltip()}`);
     RENDERING.item_elements.set(item, button);
 }
 function setupItemUndoForButton(button) {
@@ -597,8 +809,7 @@ function setupItemUndoForButton(button) {
         if (item_type == ItemType.Count) {
             return "Undo Last Item Use";
         }
-        const item = ITEMS[item_type];
-        return `Undo Use of ${amount} ${amount == 1 ? `${item.name}` : `${item.name_plural}`}`;
+        return `Undo Use of ${amount} ${getItemNameWithIcon(item_type, amount != 1)}`;
     }, () => {
         const [item_type,] = GAMESTATE.undo_item;
         const conditions = "Item undo is available until you start your next Task<br>Using an Item while already having a Task active will prevent undoing<br>Automatically used Items also cannot be undone";
@@ -673,7 +884,7 @@ function sortItems(items) {
         return 0;
     });
 }
-function setupAutoUseItemsControl() {
+function setupAutoUseItemsControl(parent) {
     if (!hasPerk(PerkType.Amulet)) {
         return;
     }
@@ -681,18 +892,20 @@ function setupAutoUseItemsControl() {
     item_control.className = "element";
     function setItemControlName() {
         item_control.textContent = GAMESTATE.auto_use_items ? "Auto Use Items" : "Manual Use Items";
+        queueUpdateTooltip();
     }
     setItemControlName();
     item_control.addEventListener("click", () => {
         GAMESTATE.auto_use_items = !GAMESTATE.auto_use_items;
         setItemControlName();
     });
-    setupTooltipStaticHeader(item_control, `${item_control.textContent}`, function () {
+    setupTooltip(item_control, () => { return `${item_control.textContent}`; }, function () {
         let tooltip = "Toggle between items being used automatically, and only being used manually";
         tooltip += "<br>Won't use Artifacts";
+        tooltip += "<br><br>Hotkey: I";
         return tooltip;
     });
-    RENDERING.controls_list_element.appendChild(item_control);
+    parent.appendChild(item_control);
 }
 function updateItems() {
     RENDERING.item_undo_element.disabled = GAMESTATE.undo_item[0] == ItemType.Count;
@@ -704,6 +917,10 @@ function updateItems() {
         const count_text = button.querySelector(".item-count");
         count_text.textContent = `${item_count}`;
     }
+}
+export function getItemNameWithIcon(item_type, plural = false) {
+    const item = ITEMS[item_type];
+    return `${item.icon}${plural ? item.name_plural : item.name}`;
 }
 // MARK: Perks
 function createPerkDiv(perk, perks_div, enabled) {
@@ -718,7 +935,7 @@ function createPerkDiv(perk, perks_div, enabled) {
     const zone = ZONES.findIndex((zone) => {
         return zone.tasks.find((task) => { return task.perk == perk; }) !== undefined;
     });
-    setupTooltipStatic(perk_div, `${perk_definition.name}`, `${perk_definition.getTooltip()}<br><br>Unlocked in Zone ${zone + 1}`);
+    setupTooltip(perk_div, () => `${perk_definition.name}`, () => `${perk_definition.getTooltip()}<br><br>Unlocked in Zone ${zone + 1}`);
     perk_div.appendChild(perk_text);
     perks_div.appendChild(perk_div);
     RENDERING.perk_elements.set(perk, perk_div);
@@ -750,27 +967,59 @@ function populateEnergyReset(energy_reset_div) {
     open_button.disabled = false;
     energy_reset_div.classList.remove("hidden");
     energy_reset_div.innerHTML = "";
+    RENDERING.viewing_last_reset = !GAMESTATE.is_in_energy_reset;
     if (GAMESTATE.is_in_energy_reset) {
         energy_reset_div.innerHTML = "<h2>Out of Energy</h2>" +
             "<p>You used up all your Energy, but this is not the end.</p>" +
-            "<p>You keep half your Items (rounded up).</p>" +
+            (hasPerk(PerkType.UnderstandingTheReset) ? "<p>You keep half your Items (rounded up).</p>" : "<p>You lose your unused Items.</p>") +
             "<p>The effects of used Items disappear.</p>" +
             "<p>You keep all your Skills and Perks.</p>";
     }
     else {
         energy_reset_div.innerHTML = "<h2>Last Run</h2>";
     }
-    const button = document.createElement("button");
-    button.className = "game-over-dismiss";
-    button.textContent = GAMESTATE.is_in_energy_reset ? "Start the Journey Over, Wiser" : "Dismiss";
-    button.addEventListener("click", () => {
+    const hasHadItemInheritance = hasPerk(PerkType.UnderstandingTheReset) || GAMESTATE.prestige_count > 0;
+    function handleReset() {
         energy_reset_div.classList.add("hidden");
-        if (GAMESTATE.is_in_energy_reset) {
-            doEnergyReset();
+        doEnergyReset();
+        if (shouldShowBossHint()) {
+            showHint("You've gotten to Zone 10 now without beating any Bosses.<br>Consider that it might be time to beat one up");
+            setHasGottenBossHint();
         }
-    });
-    setupTooltipStatic(button, button.textContent, GAMESTATE.is_in_energy_reset ? "Do Energy Reset" : "Return to the game");
-    energy_reset_div.appendChild(button);
+        else if (shouldShowPrepRunHint()) {
+            showHint("You've used Items for the past several runs.<br>Have you considered doing a run without using any Items, so you'll have more items for the next run?");
+            setHasGottenPrepRunHint();
+        }
+    }
+    if (!GAMESTATE.is_in_energy_reset || !hasHadItemInheritance) {
+        const button = createChildElement(energy_reset_div, "button");
+        button.className = "dismiss";
+        button.textContent = GAMESTATE.is_in_energy_reset ? "Start the Journey Over, Wiser" : "Dismiss";
+        button.addEventListener("click", () => {
+            energy_reset_div.classList.add("hidden");
+            if (GAMESTATE.is_in_energy_reset) {
+                handleReset();
+            }
+            RENDERING.viewing_last_reset = false;
+        });
+        setupTooltipStatic(button, button.textContent, GAMESTATE.is_in_energy_reset ? "Do Energy Reset" : "Return to the game");
+    }
+    else {
+        const auto_button = createChildElement(energy_reset_div, "button");
+        const no_auto_button = createChildElement(energy_reset_div, "button");
+        auto_button.className = "dismiss";
+        no_auto_button.className = "dismiss";
+        auto_button.textContent = "Reset, With Auto Use Items";
+        no_auto_button.textContent = "Reset, Without Auto Use Items";
+        auto_button.addEventListener("click", () => {
+            GAMESTATE.auto_use_items = true;
+            handleReset();
+        });
+        no_auto_button.addEventListener("click", () => {
+            GAMESTATE.auto_use_items = false;
+            handleReset();
+        });
+    }
     const skill_gain = document.createElement("div");
     skill_gain.innerHTML = "";
     createChildElement(skill_gain, "h3").textContent = "Skills gained:";
@@ -786,14 +1035,14 @@ function populateEnergyReset(energy_reset_div) {
     if (power_gain > 0) {
         const power_gain_text = document.createElement("p");
         const speed_bonus = calcPowerSpeedBonusAtLevel(info.power_at_end) / calcPowerSpeedBonusAtLevel(info.power_at_start);
-        power_gain_text.textContent = `${POWER_TEXT}: +${formatNumber(power_gain, false)} (x${speed_bonus.toFixed(2)} speed)`;
+        power_gain_text.textContent = `${POWER_TEXT}: +${formatInt(power_gain)} (x${speed_bonus.toFixed(2)} speed)`;
         skill_gain.appendChild(power_gain_text);
     }
     const attunement_gain = info.attunement_at_end - info.attunement_at_start;
     if (attunement_gain > 0) {
         const attunement_gain_text = document.createElement("p");
         const speed_bonus = calcAttunementSpeedBonusAtLevel(info.attunement_at_end) / calcAttunementSpeedBonusAtLevel(info.attunement_at_start);
-        attunement_gain_text.textContent = `${ATTUNEMENT_TEXT}: +${formatNumber(attunement_gain, false)} (x${speed_bonus.toFixed(2)} speed)`;
+        attunement_gain_text.textContent = `${ATTUNEMENT_TEXT}: +${formatInt(attunement_gain)} (x${speed_bonus.toFixed(2)} speed)`;
         skill_gain.appendChild(attunement_gain_text);
     }
     if (hasPerk(PerkType.EnergeticMemory)) {
@@ -835,21 +1084,42 @@ function populateEndOfContent(end_of_content_div) {
     }
     reset_count.innerHTML = `You've done ${GAMESTATE.energy_reset_count} Energy Resets this Prestige`;
     reset_count.innerHTML += `<br>You've done ${GAMESTATE.prestige_count} Prestiges`;
-    const reset_button = end_of_content_div.querySelector("#end-of-content-reset");
-    if (!reset_button) {
+    const energy_reset_button = end_of_content_div.querySelector("#end-of-content-reset");
+    if (!energy_reset_button) {
         console.error("No reset button");
         return;
     }
-    reset_button.innerHTML = "";
-    reset_button.textContent = "Do Energy Reset";
-    setupTooltipStatic(reset_button, "Do Energy Reset", "Do a regular Energy Reset to keep on playing");
-    reset_button.addEventListener("click", () => {
-        end_of_content_div.classList.add("hidden");
+    energy_reset_button.innerHTML = "";
+    energy_reset_button.textContent = "Do Energy Reset";
+    setupTooltipStatic(energy_reset_button, "Do Energy Reset", "Do a regular Energy Reset to keep on playing");
+    energy_reset_button.addEventListener("click", () => {
         doEnergyReset();
+    });
+    const prestige_button = end_of_content_div.querySelector("#end-of-content-prestige");
+    if (!prestige_button) {
+        console.error("No prestige button");
+        return;
+    }
+    prestige_button.innerHTML = "";
+    prestige_button.textContent = "Prestige";
+    setupTooltipStatic(prestige_button, "Prestige", "Do a Prestige to keep on playing");
+    prestige_button.addEventListener("click", () => {
+        triggerPrestigeConfirmation();
+    });
+    const credits_button = end_of_content_div.querySelector("#end-of-content-credits");
+    if (!credits_button) {
+        console.error("No credits button");
+        return;
+    }
+    credits_button.innerHTML = "";
+    credits_button.textContent = "Credits";
+    setupTooltipStatic(credits_button, "Credits", "View the game's Credits");
+    credits_button.addEventListener("click", () => {
+        showCredits();
     });
 }
 function updateGameOver() {
-    const showing_energy_reset = !RENDERING.energy_reset_element.classList.contains("hidden");
+    const showing_energy_reset = !RENDERING.energy_reset_element.classList.contains("hidden") && !RENDERING.viewing_last_reset;
     if (!showing_energy_reset && GAMESTATE.is_in_energy_reset) {
         populateEnergyReset(RENDERING.energy_reset_element);
     }
@@ -857,8 +1127,21 @@ function updateGameOver() {
     if (!showing_end_of_content && GAMESTATE.is_at_end_of_content) {
         populateEndOfContent(RENDERING.end_of_content_element);
     }
+    else if (showing_end_of_content && !GAMESTATE.is_at_end_of_content) {
+        RENDERING.end_of_content_element.classList.add("hidden");
+    }
 }
 // MARK: Prestige
+function triggerPrestigeConfirmation() {
+    let warning = `Will give ${formatInt(calcDivineSparkGain())} ${DIVINE_SPARK_TEXT}, but reset everything except that which is granted by Divinity purchases`;
+    if (!hasPrestigeUnlock(PrestigeUnlockType.SeeBeyondTheVeil)) {
+        warning += `<br>Will also remove all Boss Tasks from automation`;
+    }
+    createConfirmationOverlay("Do Prestige", warning, () => {
+        doPrestige();
+        populatePrestigeView();
+    });
+}
 function populatePrestigeView() {
     const prestige_overlay = RENDERING.prestige_overlay_element;
     const prestige_div = prestige_overlay.querySelector("#prestige-box");
@@ -876,7 +1159,7 @@ function populatePrestigeView() {
     scroll_area.className = "scroll-area";
     {
         const close_button = createChildElement(prestige_div, "button");
-        close_button.className = "close";
+        close_button.className = "close close-scroll";
         close_button.textContent = "X";
         close_button.addEventListener("click", () => {
             prestige_overlay.classList.add("hidden");
@@ -900,29 +1183,28 @@ function populatePrestigeView() {
             return desc;
         });
         prestige_button.addEventListener("click", () => {
-            createConfirmationOverlay("Do Prestige", `Will give ${formatNumber(calcDivineSparkGain(), false)} ${DIVINE_SPARK_TEXT}, but reset everything except that which is granted by Divinity purchases`, () => {
-                doPrestige();
-                populatePrestigeView();
-            });
+            triggerPrestigeConfirmation();
         });
         prestige_button.classList.toggle("prestige-glow", GAMESTATE.unlocked_new_prestige_this_prestige);
         const divine_spark = createChildElement(summary_div, "p");
-        divine_spark.innerHTML = `${DIVINE_SPARK_TEXT}: ${formatNumber(GAMESTATE.divine_spark, false)} (+${formatNumber(calcDivineSparkGain(), false)})<span class="divine-spark-info">ℹ</span>`;
+        divine_spark.innerHTML = `${DIVINE_SPARK_TEXT}: ${formatInt(GAMESTATE.divine_spark)} (+${formatInt(calcDivineSparkGain())})<span class="divine-spark-info">ℹ</span>`;
         divine_spark.className = "divine-spark-text";
         setupTooltipStaticHeader(divine_spark, `${DIVINE_SPARK_TEXT} Gain`, () => {
             const dummy_div = document.createElement("div");
             const divine_spark = createChildElement(dummy_div, "p");
-            divine_spark.innerHTML = `${DIVINE_SPARK_TEXT} gain if you Prestige now: +${formatNumber(calcDivineSparkGain(), false)}`;
+            divine_spark.innerHTML = `${DIVINE_SPARK_TEXT} gain if you Prestige now: +${formatInt(calcDivineSparkGain())}`;
             const divine_spark_gain = createChildElement(dummy_div, "p");
-            divine_spark_gain.innerHTML = `${DIVINE_SPARK_TEXT} gain formula:<br>Highest Zone ^ ${getPrestigeGainExponent()} + ${PRESTIGE_FULLY_COMPLETED_MULT} * (Highest Zone fully completed ^ ${getPrestigeGainExponent()})`;
-            divine_spark_gain.innerHTML += `<br>Gain divisor: ${formatNumber(calcDivineSparkDivisor(), false)}`;
+            divine_spark_gain.innerHTML = `${DIVINE_SPARK_TEXT} gain formula:<br>100, multiplied by ${formatNumber(getPrestigeGainExponent())} for each Zone past 15`;
+            if (hasPerk(PerkType.Awakening)) {
+                divine_spark_gain.innerHTML += `<br>Multiplier from ${getPerkNameWithEmoji(PerkType.Awakening)}: ${formatNumber(1 + AWAKENING_DIVINE_SPARK_MULT)}`;
+            }
+            if (hasPerk(PerkType.DefiedTheGods)) {
+                divine_spark_gain.innerHTML += `<br>Multiplier from ${getPerkNameWithEmoji(PerkType.DefiedTheGods)}: ${formatNumber(1 + DEFIED_THE_GODS_SPARK_MULT)}`;
+            }
             const divine_spark_gain_stats = createChildElement(dummy_div, "p");
             divine_spark_gain_stats.innerHTML = `Highest Zone reached: ${GAMESTATE.highest_zone + 1}`;
-            divine_spark_gain_stats.innerHTML += `<br>Highest Zone fully completed: ${GAMESTATE.highest_zone_fully_completed + 1}`;
             const potentialReachGain = calcDivineSparkGainFromHighestZone(GAMESTATE.highest_zone + 1) - calcDivineSparkGainFromHighestZone(GAMESTATE.highest_zone);
-            divine_spark_gain_stats.innerHTML += `<br><br>Additional ${DIVINE_SPARK_TEXT} for reaching Zone ${GAMESTATE.highest_zone + 2}: ${formatNumber(potentialReachGain, false)}`;
-            const potentialFullCompletionGain = calcDivineSparkGainFromHighestZoneFullyCompleted(GAMESTATE.highest_zone_fully_completed + 1) - calcDivineSparkGainFromHighestZoneFullyCompleted(GAMESTATE.highest_zone_fully_completed);
-            divine_spark_gain_stats.innerHTML += `<br>Additional ${DIVINE_SPARK_TEXT} for fully completing Zone ${GAMESTATE.highest_zone_fully_completed + 2}: ${formatNumber(potentialFullCompletionGain, false)}`;
+            divine_spark_gain_stats.innerHTML += `<br><br>Additional ${DIVINE_SPARK_TEXT} for reaching Zone ${GAMESTATE.highest_zone + 2}: ${formatInt(potentialReachGain)}`;
             return dummy_div.innerHTML;
         });
         const prestiges_done_text = createChildElement(summary_div, "p");
@@ -948,7 +1230,7 @@ function populatePrestigeView() {
             }
             unlock_button.innerHTML = `${unlock.name}`;
             if (!is_unlocked) {
-                unlock_button.innerHTML += `<br>Cost: ${unlock.cost}`;
+                unlock_button.innerHTML += `<br>Cost: ${formatInt(unlock.cost)}`;
             }
             if (!is_unlocked) {
                 unlock_button.disabled = unlock.cost > GAMESTATE.divine_spark;
@@ -961,53 +1243,72 @@ function populatePrestigeView() {
                 });
             }
         }
-        const upgrades_div = createChildElement(touch_the_divine_div, "div");
-        const upgrades_header = createChildElement(upgrades_div, "h3");
-        upgrades_header.textContent = "Repeatable Upgrades";
-        const repeatables_purchases = createChildElement(upgrades_div, "div");
-        repeatables_purchases.className = "prestige-purchases";
-        for (const upgrade of PRESTIGE_REPEATABLES.filter((unlock) => { return unlock.layer == prestige_layer; })) {
-            const unlock_button = createChildElement(repeatables_purchases, "button");
-            unlock_button.className = "prestige-purchase prestige-purchase-repeatable";
-            const cost = calcPrestigeRepeatableCost(upgrade.type);
-            const level = getPrestigeRepeatableLevel(upgrade.type);
-            unlock_button.innerHTML = `${upgrade.name}<br>Cost: ${cost}<br>Level: ${level}`;
-            unlock_button.disabled = cost > GAMESTATE.divine_spark;
-            setupTooltipStaticHeader(unlock_button, upgrade.name, () => {
-                let desc = upgrade.get_description();
-                desc += "<br><br>Current Effect: ";
-                switch (upgrade.type) {
-                    case PrestigeRepeatableType.DivineKnowledge:
-                        desc += `+${formatNumber(DIVINE_KNOWLEDGE_MULT * level * 100, false)}%`;
-                        break;
-                    case PrestigeRepeatableType.UnlimitedPower:
-                        desc += `x${formatNumber(Math.pow(2, level), false)}`;
-                        break;
-                    case PrestigeRepeatableType.DivineAppetite:
-                        desc += `+${formatNumber(DIVINE_APPETITE_ENERGY_ITEM_BOOST_MULT * level * 100, false)}%`;
-                        break;
-                    case PrestigeRepeatableType.GottaGoFast:
-                        desc += `x${formatNumber(Math.pow(GOTTA_GO_FAST_BASE, level))}`;
-                        break;
-                    case PrestigeRepeatableType.DivineLightning:
-                        desc += `+${(level * DIVINE_LIGHTNING_EXPONENT_INCREASE).toFixed(1)}`;
-                        break;
-                    case PrestigeRepeatableType.TranscendantAptitude:
-                        desc += `+${level * TRANSCENDANT_APTITUDE_MULT}`;
-                        break;
-                    case PrestigeRepeatableType.Energized:
-                        desc += `+${level * ENERGIZED_INCREASE}`;
-                        break;
-                    default:
-                        console.error("Unhandled upgrade");
-                        break;
-                }
-                return desc;
-            });
-            unlock_button.addEventListener("click", () => {
-                increasePrestigeRepeatableLevel(upgrade.type);
-                populatePrestigeView();
-            });
+        const repeatables = PRESTIGE_REPEATABLES.filter((unlock) => { return unlock.layer == prestige_layer; });
+        if (repeatables.length != 0) {
+            const upgrades_div = createChildElement(touch_the_divine_div, "div");
+            const upgrades_header = createChildElement(upgrades_div, "h3");
+            upgrades_header.textContent = "Repeatable Upgrades";
+            const repeatables_purchases = createChildElement(upgrades_div, "div");
+            repeatables_purchases.className = "prestige-purchases";
+            for (const upgrade of repeatables) {
+                const unlock_button = createChildElement(repeatables_purchases, "button");
+                unlock_button.className = "prestige-purchase prestige-purchase-repeatable";
+                const cost = calcPrestigeRepeatableCost(upgrade.type);
+                const level = getPrestigeRepeatableLevel(upgrade.type);
+                unlock_button.innerHTML = `${upgrade.name}<br>Cost: ${formatInt(cost)}<br>Level: ${level}`;
+                unlock_button.disabled = cost > GAMESTATE.divine_spark;
+                setupTooltipStaticHeader(unlock_button, upgrade.name, () => {
+                    let desc = upgrade.get_description();
+                    desc += "<br><br>Current Effect: ";
+                    switch (upgrade.type) {
+                        case PrestigeRepeatableType.DivineKnowledge:
+                            desc += `+${formatPercentage(DIVINE_KNOWLEDGE_MULT * level)}`;
+                            break;
+                        case PrestigeRepeatableType.DivinerKnowledge:
+                            desc += `+${formatPercentage(DIVINER_KNOWLEDGE_MULT * level)}`;
+                            break;
+                        case PrestigeRepeatableType.UnlimitedPower:
+                            desc += `x${formatInt(Math.pow(2, level))}`;
+                            break;
+                        case PrestigeRepeatableType.DivineAppetite:
+                            desc += `+${formatPercentage(DIVINE_APPETITE_ENERGY_ITEM_BOOST_MULT * level)}`;
+                            break;
+                        case PrestigeRepeatableType.GottaGoFast:
+                            desc += `x${formatNumber(Math.pow(GOTTA_GO_FAST_BASE, level))}`;
+                            break;
+                        case PrestigeRepeatableType.DivineLightning:
+                            desc += `+${formatNumber(level * DIVINE_LIGHTNING_EXPONENT_INCREASE)}`;
+                            break;
+                        case PrestigeRepeatableType.TranscendantAptitude:
+                            desc += `+${level * TRANSCENDANT_APTITUDE_MULT}`;
+                            break;
+                        case PrestigeRepeatableType.Energized:
+                            desc += `+${level * ENERGIZED_INCREASE}`;
+                            desc += ` and +${formatPercentage(level * ENERGIZED_PERK_INCREASE)}`;
+                            break;
+                        case PrestigeRepeatableType.Deenergized:
+                            desc += `x${formatNumber(Math.pow(DEENERGIZED_BASE, level))}`;
+                            break;
+                        case PrestigeRepeatableType.MandatorySchmandatory:
+                            desc += `+${formatPercentage(level * MANDATORY_SCHMANDATORY_MULT)}`;
+                            break;
+                        case PrestigeRepeatableType.DivineAttunement:
+                            desc += `x${formatNumber(Math.pow(DIVINE_ATTUNEMENT_BASE, level))}`;
+                            break;
+                        case PrestigeRepeatableType.SpiteTheGods:
+                            desc += `+${formatPercentage(calcSpiteTheGodsBonus() - 1)}`;
+                            break;
+                        default:
+                            console.error("Unhandled upgrade");
+                            break;
+                    }
+                    return desc;
+                });
+                unlock_button.addEventListener("click", () => {
+                    increasePrestigeRepeatableLevel(upgrade.type);
+                    populatePrestigeView();
+                });
+            }
         }
     }
     scroll_area.scrollTop = scrollTop;
@@ -1024,7 +1325,7 @@ function setupOpenPrestige() {
             prestige_overlay.classList.add("hidden");
         }
     });
-    setupTooltip(open_button, function () { return `${DIVINE_SPARK_TEXT} - ${formatNumber(GAMESTATE.divine_spark, false)}`; }, function () {
+    setupTooltip(open_button, function () { return `${DIVINE_SPARK_TEXT} - ${formatInt(GAMESTATE.divine_spark)}`; }, function () {
         const tooltip = `Within this menu you can Prestige to gain ${DIVINE_SPARK_TEXT}, and buy powerful upgrades`;
         return tooltip;
     });
@@ -1053,7 +1354,7 @@ export function formatNumber(n, allow_decimals = true) {
     }
     const postfixes = ["k", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc"];
     let postfix_index = -1;
-    while (n > 1000 && (postfix_index + 1) < postfixes.length) {
+    while (n >= 1000 && (postfix_index + 1) < postfixes.length) {
         n = n / 1000;
         postfix_index++;
     }
@@ -1067,6 +1368,12 @@ export function formatNumber(n, allow_decimals = true) {
         return n.toFixed(0) + postfixes[postfix_index];
     }
 }
+export function formatInt(n) {
+    return formatNumber(n, false);
+}
+export function formatPercentage(n) {
+    return `${formatInt(n * 100)}%`;
+}
 // MARK: Settings
 function setupSettings() {
     const settings_div = RENDERING.settings_element;
@@ -1078,7 +1385,7 @@ function setupSettings() {
     open_button.addEventListener("click", () => {
         settings_div.classList.remove("hidden");
     });
-    setupTooltipStatic(open_button, `Open Settings Menu`, `Lets you Save and Load from disk`);
+    setupTooltipStatic(open_button, `Open Settings Menu`, `Deal with saving and tooltips, or view the Changelog and Credits`);
     const close_button = settings_div.querySelector(".close");
     if (!close_button) {
         console.error("No close button");
@@ -1109,6 +1416,44 @@ function setupSettings() {
             changelog_overlay.classList.add("hidden");
         }
     });
+    const credits_button = settings_div.querySelector("#credits");
+    if (!credits_button) {
+        console.error("No credits button");
+        return;
+    }
+    setupTooltipStatic(credits_button, "Open Credits", "View the game credits");
+    credits_button.addEventListener("click", () => {
+        showCredits();
+    });
+    const credits_overlay = RENDERING.credits_overlay_element;
+    credits_overlay.addEventListener("click", (e) => {
+        if (e.target == credits_overlay) { // Clicking outside the window
+            credits_overlay.classList.add("hidden");
+        }
+    });
+    const manual_tooltips_button = settings_div.querySelector("#manual-tooltips");
+    if (!manual_tooltips_button) {
+        console.error("No manual-tooltips button");
+        return;
+    }
+    manual_tooltips_button.addEventListener("click", () => {
+        GAMESTATE.manual_tooltips = !GAMESTATE.manual_tooltips;
+        updateSettingsDisplay();
+        queueUpdateTooltip();
+    });
+    setupTooltip(manual_tooltips_button, function () { return GAMESTATE.manual_tooltips ? "Switch to Manual Tooltips" : "Switch to Automatic Tooltips"; }, function () {
+        return "With Manual Tooltips enabled, tooltips only show up while CTRL is held";
+    });
+    updateSettingsDisplay();
+}
+function updateSettingsDisplay() {
+    const settings_div = RENDERING.settings_element;
+    const manual_tooltips_button = settings_div.querySelector("#manual-tooltips");
+    if (!manual_tooltips_button) {
+        console.error("No manual-tooltips button");
+        return;
+    }
+    manual_tooltips_button.textContent = GAMESTATE.manual_tooltips ? "Manual Tooltips" : "Auto Tooltips";
 }
 // MARK: Settings: Saves
 function setupPersistence(settings_div) {
@@ -1124,7 +1469,11 @@ function setupPersistence(settings_div) {
             console.error("No save data");
             return;
         }
-        const file_name = `Incremental_save_Reset_${GAMESTATE.energy_reset_count}_energy_${GAMESTATE.current_energy.toFixed(0)}.json`;
+        let file_name = "JourneyToAscension";
+        if (GAMESTATE.prestige_count > 0) {
+            file_name += "_Prestige" + GAMESTATE.prestige_count;
+        }
+        file_name += `_Reset_${GAMESTATE.energy_reset_count}_energy_${GAMESTATE.current_energy.toFixed(0)}`;
         const blob = new Blob([save_data], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -1164,6 +1513,17 @@ function setupPersistence(settings_div) {
         input.click();
     });
     setupTooltipStatic(load_button, `Import Save`, `Load the game's progress from disk`);
+    const reset_button = settings_div.querySelector("#reset-save");
+    if (!reset_button) {
+        console.error("No reset-save button");
+        return;
+    }
+    reset_button.addEventListener("click", () => {
+        createConfirmationOverlay("Reset Save", `Will reset absolutely all progress. It's highly recommendex you export a Save first`, () => {
+            resetSave();
+        });
+    });
+    setupTooltipStatic(reset_button, `Reset Save`, `Resets *everything*`);
 }
 // MARK: Events
 function handleEvents() {
@@ -1175,6 +1535,9 @@ function handleEvents() {
             continue; // No message, just forces tooltips to update
         }
         if (event.type == EventType.GainedItem) {
+            if (RENDERING.item_elements.size != GAMESTATE.items.size) {
+                recreateTasks(); // Get rid of potential glow
+            }
             recreateItemsIfNeeded();
             continue; // No message, just forces item list to update
         }
@@ -1234,7 +1597,7 @@ function handleEvents() {
                     const item_context = context;
                     const item = ITEMS[item_context.item];
                     const plural = item_context.count > 1;
-                    message_div.innerHTML = `Used ${item_context.count} ${item.icon}${plural ? item.name_plural : item.name}`;
+                    message_div.innerHTML = `Used ${item_context.count} ${getItemNameWithIcon(item_context.item, plural)}`;
                     message_div.innerHTML += `<br>${item.getEffectText(item_context.count)}`;
                     recreateItemsIfNeeded();
                     break;
@@ -1242,9 +1605,8 @@ function handleEvents() {
             case EventType.UndidItem:
                 {
                     const item_context = context;
-                    const item = ITEMS[item_context.item];
                     const plural = item_context.count > 1;
-                    message_div.innerHTML = `Undid use of ${item_context.count} ${item.icon}${plural ? item.name_plural : item.name}`;
+                    message_div.innerHTML = `Undid use of ${item_context.count} ${getItemNameWithIcon(item_context.item, plural)}`;
                     recreateItemsIfNeeded();
                     break;
                 }
@@ -1294,6 +1656,13 @@ function handleEvents() {
                     message_div.innerHTML = `Skipped to Zone ${GAMESTATE.current_zone + 1} thanks to ${getPerkNameWithEmoji(PerkType.MinorTimeCompression)}`;
                     break;
                 }
+            case EventType.SkippedTasks:
+                {
+                    const skipped_tasks_context = context;
+                    const num = skipped_tasks_context.tasks;
+                    message_div.innerHTML = `Skipped ${num} ${num > 1 ? "Tasks" : "Task"} thanks to Mastery of Time`;
+                    break;
+                }
             default:
                 break;
         }
@@ -1315,15 +1684,20 @@ function handleEvents() {
 // MARK: Controls
 function setupControls() {
     RENDERING.controls_list_element.innerHTML = "";
-    setupRepeatTasksControl();
+    // First row: toggle buttons
+    const toggles_row = createChildElement(RENDERING.controls_list_element, "div");
+    toggles_row.className = "controls-row";
+    setupRepeatTasksControl(toggles_row);
+    setupAutoUseItemsControl(toggles_row);
+    // Second row: automation (with border)
     setupAutomationControls();
-    setupAutoUseItemsControl();
 }
-function setupRepeatTasksControl() {
+function setupRepeatTasksControl(parent) {
     const rep_control = document.createElement("button");
     rep_control.className = "element";
     function setRepControlName() {
         rep_control.textContent = GAMESTATE.repeat_tasks ? "Repeat Tasks" : "Don't Repeat Tasks";
+        queueUpdateTooltip();
     }
     setRepControlName();
     rep_control.addEventListener("click", () => {
@@ -1331,71 +1705,98 @@ function setupRepeatTasksControl() {
         setRepControlName();
     });
     setupTooltip(rep_control, function () { return rep_control.textContent; }, function () {
-        return "Toggle between repeating Tasks if they have multiple reps, or only doing a single rep<br>When repeating, the Task tooltip will show the numbers for doing all remaining reps rather than just one";
+        return "Toggle between repeating Tasks if they have multiple reps, or only doing a single rep<br>When repeating, the Task tooltip will show the numbers for doing all remaining reps rather than just one<br><br>Hotkey: R";
     });
-    RENDERING.controls_list_element.appendChild(rep_control);
+    parent.appendChild(rep_control);
 }
 // MARK: Controls - Automation
+function toggleAutomationMode(mode) {
+    if (mode == GAMESTATE.automation_mode) {
+        setAutomationMode(AutomationMode.Off);
+    }
+    else {
+        setAutomationMode(mode);
+    }
+    setupControls();
+}
 function setupAutomationControls() {
     if (!hasPerk(PerkType.Amulet)) {
         return;
     }
-    const automation = document.createElement("div");
-    automation.className = "automation";
-    const automation_text = document.createElement("div");
+    const automation_div = createChildElement(RENDERING.controls_list_element, "div");
+    automation_div.className = "automation";
+    const automation_text = createChildElement(automation_div, "div");
     automation_text.className = "automation-text";
-    automation.textContent = "Automation";
-    const all_control = document.createElement("button");
-    const zone_control = document.createElement("button");
-    all_control.textContent = "All";
-    zone_control.textContent = "Zone";
-    function setAutomationClasses() {
-        all_control.className = GAMESTATE.automation_mode == AutomationMode.All ? "on" : "off";
-        zone_control.className = GAMESTATE.automation_mode == AutomationMode.Zone ? "on" : "off";
+    automation_text.textContent = "Task Automation";
+    const automation_controls_div = createChildElement(automation_div, "div");
+    automation_controls_div.className = "automation-controls";
+    const all_control = createChildElement(automation_controls_div, "button");
+    const to_zone_disabled = GAMESTATE.automation_mode != AutomationMode.All && GAMESTATE.current_zone >= GAMESTATE.automation_end;
+    all_control.disabled = to_zone_disabled;
+    function updateZoneButtonText() {
+        all_control.innerHTML = `To<br>Zone ${GAMESTATE.automation_end}`;
     }
-    setAutomationClasses();
+    updateZoneButtonText();
+    const { input: until_zone_input } = createNumericInput(automation_controls_div, {
+        min: 1,
+        max: 99,
+        initialValue: GAMESTATE.automation_end,
+        onChange: (value) => {
+            setAutomationEndZone(value);
+            setupControls();
+        },
+        ariaLabel: "Target zone for automation"
+    });
+    const zone_control = createChildElement(automation_controls_div, "button");
+    zone_control.textContent = "Current Zone";
+    all_control.className = GAMESTATE.automation_mode == AutomationMode.All ? "on" : "off";
+    zone_control.className = GAMESTATE.automation_mode == AutomationMode.Zone ? "on" : "off";
     all_control.addEventListener("click", () => {
-        setAutomationMode(GAMESTATE.automation_mode == AutomationMode.All ? AutomationMode.Off : AutomationMode.All);
-        setAutomationClasses();
+        toggleAutomationMode(AutomationMode.All);
     });
     zone_control.addEventListener("click", () => {
-        setAutomationMode(GAMESTATE.automation_mode == AutomationMode.Zone ? AutomationMode.Off : AutomationMode.Zone);
-        setAutomationClasses();
+        toggleAutomationMode(AutomationMode.Zone);
     });
-    setupTooltip(all_control, function () { return `Automate ${all_control.textContent}`; }, function () {
-        let tooltip = "Toggle between automating Ttasks in all zones, and not automating";
+    setupTooltip(all_control, function () { return `Automate To Zone ${GAMESTATE.automation_end}`; }, function () {
+        let tooltip = ``;
+        if (to_zone_disabled) {
+            tooltip += `<p class="disable-reason">Disabled due to the target Zone (${GAMESTATE.automation_end + 1}) not being higher than the current Zone (${GAMESTATE.current_zone + 1})</p>`;
+        }
+        tooltip += `Toggle between no automation, and automating Tasks until the specified Zone (${GAMESTATE.automation_end}) is reached`;
         tooltip += "<br>Right-click Tasks to designate them as automated";
         tooltip += "<br>They'll be executed in the order you right-clicked them, as indicated by the number in their corner";
+        tooltip += "<br><br>Hotkey: A";
         return tooltip;
     });
     setupTooltip(zone_control, function () { return `Automate ${zone_control.textContent}`; }, function () {
-        let tooltip = "Toggle between automating Tasks in the current zone, and not automating";
+        let tooltip = "Toggle between no automation, automating Tasks in the current zone";
         tooltip += "<br>Right-click Tasks to designate them as automated";
         tooltip += "<br>They'll be executed in the order you right-clicked them, as indicated by the number in their corner";
+        tooltip += "<br><br>Hotkey: Z";
         return tooltip;
     });
-    automation.appendChild(automation_text);
-    automation.appendChild(all_control);
-    automation.appendChild(zone_control);
-    RENDERING.controls_list_element.appendChild(automation);
+    setupTooltip(until_zone_input, function () { return `Specify Target Zone`; }, function () {
+        const tooltip = "The Zone you specify here will be used by the 'To Zone' automation";
+        return tooltip;
+    });
 }
 // MARK: Extra stats
 function updateExtraStats() {
     if (GAMESTATE.has_unlocked_power && RENDERING.power_element.classList.contains("hidden")) {
         RENDERING.power_element.classList.remove("hidden");
-        setupTooltip(RENDERING.power_element, function () { return `💪Power - ${formatNumber(GAMESTATE.power, false)}`; }, function () {
-            let tooltip = `Increases ${getSkillString(SkillType.Combat)} and ${getSkillString(SkillType.Fortitude)} speed by ${formatNumber(GAMESTATE.power, false)}%`;
+        setupTooltip(RENDERING.power_element, function () { return `💪Power - ${formatInt(GAMESTATE.power)}`; }, function () {
+            let tooltip = `Increases ${getSkillString(SkillType.Combat)} and ${getSkillString(SkillType.Fortitude)} speed by ${formatInt(GAMESTATE.power)}%`;
             tooltip += `<br><br>Increased by fighting Bosses`;
             return tooltip;
         });
     }
-    const power_text = `<span>💪Power</span><span>${formatNumber(GAMESTATE.power, false)}</span>`;
+    const power_text = `<span>💪Power</span><span>${formatInt(GAMESTATE.power)}</span>`;
     if (RENDERING.power_element.innerHTML != power_text) {
         RENDERING.power_element.innerHTML = power_text;
     }
     if (hasPerk(PerkType.Attunement) && RENDERING.attunement_element.classList.contains("hidden")) {
         RENDERING.attunement_element.classList.remove("hidden");
-        setupTooltip(RENDERING.attunement_element, function () { return `🌀Attunement - ${formatNumber(GAMESTATE.attunement, false)}`; }, function () {
+        setupTooltip(RENDERING.attunement_element, function () { return `🌀Attunement - ${formatInt(GAMESTATE.attunement)}`; }, function () {
             const attunement_skill_strings = [];
             calcAttunementSkills().forEach((value) => { attunement_skill_strings.push(getSkillString(value)); });
             let tooltip = `Increases ${joinWithCommasAndAnd(attunement_skill_strings)} speed by ${formatNumber(GAMESTATE.attunement / 10)}%`;
@@ -1404,18 +1805,19 @@ function updateExtraStats() {
             return tooltip;
         });
     }
-    const attunement_text = `<span>🌀Attunement</span><span>${formatNumber(GAMESTATE.attunement, false)}</span>`;
+    const attunement_text = `<span>🌀Attunement</span><span>${formatInt(GAMESTATE.attunement)}</span>`;
     if (RENDERING.attunement_element.innerHTML != attunement_text) {
         RENDERING.attunement_element.innerHTML = attunement_text;
     }
     if (hasUnlockedPrestige() && RENDERING.open_prestige_element.classList.contains("hidden")) {
         RENDERING.open_prestige_element.classList.remove("hidden");
     }
-    const prestige_text = `<h2>${DIVINE_SPARK_TEXT}<br>${formatNumber(GAMESTATE.divine_spark, false)} (+${formatNumber(calcDivineSparkGain(), false)})</h2>`;
+    const prestige_text = GAMESTATE.prestige_available ? `<h2>${DIVINE_SPARK_TEXT}<br>${formatInt(GAMESTATE.divine_spark)} (+${formatInt(calcDivineSparkGain())})</h2>` : `<h2>${DIVINE_SPARK_TEXT}<br>${formatInt(GAMESTATE.divine_spark)}</h2>`;
     if (RENDERING.open_prestige_element.innerHTML != prestige_text) {
         RENDERING.open_prestige_element.innerHTML = prestige_text;
     }
-    RENDERING.open_prestige_element.classList.toggle("prestige-glow", GAMESTATE.unlocked_new_prestige_this_prestige);
+    const prestige_glow = GAMESTATE.unlocked_new_prestige_this_prestige || GAMESTATE.highest_zone > GAMESTATE.highest_prestige_zone;
+    RENDERING.open_prestige_element.classList.toggle("prestige-glow", prestige_glow);
 }
 // MARK: Stats
 function setupOpenStats() {
@@ -1447,7 +1849,7 @@ function populateStatsView() {
     scroll_area.className = "scroll-area";
     {
         const close_button = createChildElement(stats_div, "button");
-        close_button.className = "close";
+        close_button.className = "close close-scroll";
         close_button.textContent = "X";
         close_button.addEventListener("click", () => {
             stats_overlay.classList.add("hidden");
@@ -1455,6 +1857,12 @@ function populateStatsView() {
         setupTooltipStatic(close_button, `Close Stats Menu`, ``);
     }
     createChildElement(scroll_area, "h1").textContent = "Stats";
+    createChildElement(scroll_area, "span").textContent = `Highest Zone reached: ${GAMESTATE.highest_zone + 1}`;
+    createChildElement(scroll_area, "span").textContent = `Highest Zone fully completed: ${GAMESTATE.highest_zone_fully_completed + 1}`;
+    if (GAMESTATE.prestige_count > 0) {
+        createChildElement(scroll_area, "span").textContent = `Highest Zone reached (any Prestige): ${GAMESTATE.highest_zone_ever + 1}`;
+        createChildElement(scroll_area, "span").textContent = `Highest Zone fully completed (any Prestige): ${GAMESTATE.highest_zone_fully_completed_ever + 1}`;
+    }
     const attunement_skills = calcAttunementSkills();
     const power_skills = getPowerSkills();
     for (const skill_type of GAMESTATE.unlocked_skills) {
@@ -1473,6 +1881,13 @@ function populateStatsView() {
             if (GAMESTATE.power > 0 && power_skills.includes(skill_type)) {
                 createTwoElementRow(skill_table, POWER_TEXT, `x${formatNumber(calcPowerSpeedBonusAtLevel(GAMESTATE.attunement))}`);
             }
+            const spite_the_gods_level = getPrestigeRepeatableLevel(PrestigeRepeatableType.SpiteTheGods);
+            if (spite_the_gods_level > 0 && getSpiteTheGodsSkills().includes(skill_type)) {
+                createTwoElementRow(skill_table, "Spite the Gods", `x${formatNumber(calcSpiteTheGodsBonus())}`);
+            }
+            if (skill_type == SkillType.Travel && hasPrestigeUnlock(PrestigeUnlockType.GodlyTravel)) {
+                createTwoElementRow(skill_table, "Godly Travel", `x${GODLY_TRAVEL_MULT}`);
+            }
         }
         const item_bonuses = gatherItemBonuses(skill_type);
         if (item_bonuses.length > 0) {
@@ -1481,7 +1896,7 @@ function populateStatsView() {
                 const item = ITEMS[item_type];
                 const modifier = item.skill_modifiers.getStacked(amount);
                 const effect = modifier.getSkillEffect(skill_type);
-                createTwoElementRow(item_table, `${amount} ${item.getNameWithEmoji(amount)}`, `+${formatNumber(effect * 100)}%`);
+                createTwoElementRow(item_table, `${amount} ${item.getNameWithEmoji(amount)}`, `+${formatPercentage(effect)}`);
             }
             createTwoElementRow(item_table, "Total Item bonus", `x${formatNumber(skill.speed_modifier)}`);
         }
@@ -1517,7 +1932,7 @@ function showChangelog(since_version = "") {
     scroll_area.className = "scroll-area";
     {
         const close_button = createChildElement(changelog_div, "button");
-        close_button.className = "close";
+        close_button.className = "close close-scroll";
         close_button.textContent = "X";
         close_button.addEventListener("click", () => {
             changelog_overlay.classList.add("hidden");
@@ -1525,6 +1940,11 @@ function showChangelog(since_version = "") {
         setupTooltipStatic(close_button, `Close Changelog`, ``);
     }
     createChildElement(scroll_area, "h1").textContent = "Changelog";
+    if (SAVE_VERSION != CHANGELOG[0]?.version) {
+        const error = createChildElement(scroll_area, "h2");
+        error.textContent = "Save version and changelog doesn't match";
+        error.className = "error";
+    }
     const end_index = since_version.length == 0
         ? CHANGELOG.length
         : CHANGELOG.findIndex((entry) => { return entry.version == since_version; });
@@ -1538,9 +1958,66 @@ function showChangelog(since_version = "") {
         createChildElement(entry_div, "p").innerHTML = entry.changes;
     }
 }
+// MARK: Credits
+function showCredits() {
+    RENDERING.credits_overlay_element.classList.remove("hidden");
+    const credits_overlay = RENDERING.credits_overlay_element;
+    const credits_div = credits_overlay.querySelector("#credits-box");
+    if (!credits_div) {
+        console.error("No credits-box");
+        return;
+    }
+    credits_div.innerHTML = "";
+    const scroll_area = createChildElement(credits_div, "div");
+    scroll_area.className = "scroll-area";
+    {
+        const close_button = createChildElement(credits_div, "button");
+        close_button.className = "close";
+        close_button.textContent = "X";
+        close_button.addEventListener("click", () => {
+            credits_overlay.classList.add("hidden");
+        });
+        setupTooltipStatic(close_button, `Close Credits`, ``);
+    }
+    createChildElement(scroll_area, "h1").textContent = "Credits";
+    createChildElement(scroll_area, "p").innerHTML = CREDITS;
+}
+// MARK: Hints
+function shouldShowPrepRunHint() {
+    if (GAMESTATE.hint_has_gotten_prep_run_hint) {
+        return false;
+    }
+    // Pretty arbitrary numbers for when the player needs to be told if they've not figured it out themselves
+    const prep_run_count_to_ignore_hint = 3; // Not 1, since the player might accidentally do it once. Thrice though is clearly deliberate
+    const non_prep_run_count_to_trigger_hint = 15;
+    return GAMESTATE.hint_prep_runs_done < prep_run_count_to_ignore_hint && GAMESTATE.hint_non_prep_runs_done >= non_prep_run_count_to_trigger_hint;
+}
+function shouldShowBossHint() {
+    if (GAMESTATE.hint_has_gotten_boss_hint) {
+        return false;
+    }
+    const zone_for_hint = 10 - 1; // 0-indexing
+    return GAMESTATE.highest_zone >= zone_for_hint && GAMESTATE.power == 0 && GAMESTATE.prestige_count == 0;
+}
+function showHint(text) {
+    const overlay = RENDERING.hints_overlay_element;
+    overlay.classList.remove("hidden");
+    createChildElement(overlay, "h1").textContent = "Hint";
+    createChildElement(overlay, "p").innerHTML = text;
+    {
+        const close_button = createChildElement(overlay, "button");
+        close_button.className = "dismiss";
+        close_button.textContent = "Dismiss";
+        close_button.addEventListener("click", () => {
+            overlay.classList.add("hidden");
+        });
+        setupTooltipStatic(close_button, `Dismiss Hint`, ``);
+    }
+}
 // MARK: Rendering
 export class Rendering {
     tooltipped_element = null;
+    potential_tooltipped_element = null;
     queued_update_tooltip = false;
     tooltip_element;
     energy_reset_element;
@@ -1565,10 +2042,13 @@ export class Rendering {
     open_stats_element;
     stats_overlay_element;
     changelog_overlay_element;
+    credits_overlay_element;
+    hints_overlay_element;
     energy_reset_count = 0;
     current_zone = 0;
     item_order = [];
     artifact_order = [];
+    viewing_last_reset = false;
     createTasks() {
         const tasks_div = document.getElementById("tasks");
         if (!tasks_div) {
@@ -1593,7 +2073,9 @@ export class Rendering {
         }
         this.energy_element = getElement("energy");
         setupTooltip(this.energy_element, function () { return `${ENERGY_TEXT} - ${GAMESTATE.current_energy.toFixed(0)}/${GAMESTATE.max_energy.toFixed(0)}`; }, function () {
-            return `${ENERGY_TEXT} goes down over time while you have a Task active`;
+            let tooltip = `${ENERGY_TEXT} goes down over time while you have a Task active`;
+            tooltip += `<br>Drain is proportional to the time spent on a Task. The drain per unit time increases slightly per Zone`;
+            return tooltip;
         });
         this.tooltip_element = getElement("tooltip");
         this.energy_reset_element = getElement("game-over-overlay");
@@ -1612,6 +2094,8 @@ export class Rendering {
         this.open_stats_element = getElement("open-stats");
         this.stats_overlay_element = getElement("stats-overlay");
         this.changelog_overlay_element = getElement("changelog-overlay");
+        this.credits_overlay_element = getElement("credits-overlay");
+        this.hints_overlay_element = getElement("hints-overlay");
     }
     initialize() {
         setupEnergyReset(this.energy_reset_element);
@@ -1631,7 +2115,7 @@ export class Rendering {
         updateRendering();
         // Unhide the game now that it's ready
         document.getElementById("game-area").classList.remove("hidden");
-        if (GAMESTATE.save_version != SAVE_VERSION) {
+        if (GAMESTATE.save_version != SAVE_VERSION || SAVE_VERSION != CHANGELOG[0]?.version) {
             showChangelog(GAMESTATE.save_version);
         }
     }
@@ -1734,6 +2218,48 @@ export function updateRendering() {
         RENDERING.queued_update_tooltip = false;
         if (RENDERING.tooltipped_element) {
             showTooltip(RENDERING.tooltipped_element);
+        }
+    }
+}
+function inputIsBeingHandled() {
+    const activeElement = document.activeElement;
+    if (!activeElement) {
+        return false;
+    }
+    const isInputField = activeElement.tagName === "INPUT" ||
+        activeElement.tagName === "TEXTAREA" ||
+        activeElement.getAttribute("contenteditable") === "true";
+    return isInputField;
+}
+export function handleHotkeyReleased(event) {
+    // Checked before input handling, since you might be looking at tooltips still
+    if (GAMESTATE.manual_tooltips && event.key == "Control") {
+        hideTooltip();
+    }
+    if (inputIsBeingHandled()) {
+        return;
+    }
+    if (hasPerk(PerkType.Amulet)) {
+        if (event.key == "a") {
+            toggleAutomationMode(AutomationMode.All);
+        }
+        else if (event.key == "z") {
+            toggleAutomationMode(AutomationMode.Zone);
+        }
+    }
+    if (event.key == "i") {
+        GAMESTATE.auto_use_items = !GAMESTATE.auto_use_items;
+        setupControls();
+    }
+    else if (event.key == "r") {
+        GAMESTATE.repeat_tasks = !GAMESTATE.repeat_tasks;
+        setupControls();
+    }
+}
+export function handleHotkeyPressed(event) {
+    if (GAMESTATE.manual_tooltips && event.key == "Control") {
+        if (RENDERING.potential_tooltipped_element) {
+            showTooltip(RENDERING.potential_tooltipped_element);
         }
     }
 }

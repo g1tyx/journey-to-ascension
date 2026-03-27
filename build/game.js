@@ -1,4 +1,4 @@
-import { Rendering, updateRendering } from "./rendering.js";
+import { handleHotkeyPressed, handleHotkeyReleased, Rendering, updateRendering } from "./rendering.js";
 import { Gamestate, saveGame, updateGamestate, resetTasks, calcTickRate } from "./simulation.js";
 function gameLoop() {
     updateGamestate();
@@ -19,15 +19,18 @@ document.addEventListener("DOMContentLoaded", () => {
     RENDERING.start();
     setTickRate();
 });
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-window.getGamestate = GAMESTATE;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-window.resetSave = () => {
+document.addEventListener("keyup", handleHotkeyReleased);
+document.addEventListener("keydown", handleHotkeyPressed);
+export function resetSave() {
     GAMESTATE = new Gamestate();
     GAMESTATE.initialize();
     saveGame();
     location.reload();
-};
+}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.getGamestate = GAMESTATE;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+window.resetSave = resetSave;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 window.resetZone = () => {
     resetTasks();

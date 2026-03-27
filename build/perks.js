@@ -1,9 +1,10 @@
+import { GAMESTATE } from "./game.js";
 import { PerkSkillModifierList } from "./modifiers.js";
 import { PrestigeUnlockType } from "./prestige_upgrades.js";
-import { formatNumber, getSkillString } from "./rendering.js";
-import { DIVINE_SPARK_TEXT, ENERGY_TEXT, XP_TEXT } from "./rendering_constants.js";
-import { hasPrestigeUnlock } from "./simulation.js";
-import { REFLECTIONS_ON_THE_JOURNEY_BOOSTED_BASE, REFLECTIONS_ON_THE_JOURNEY_BASE, AWAKENING_DIVINE_SPARK_MULT } from "./simulation_constants.js";
+import { formatPercentage } from "./rendering.js";
+import { ATTUNEMENT_TEXT, DIVINE_SPARK_TEXT, ENERGY_TEXT, XP_TEXT } from "./rendering_constants.js";
+import { calcReflectionsOnTheJourneyMult, hasPrestigeUnlock } from "./simulation.js";
+import { REFLECTIONS_ON_THE_JOURNEY_BOOSTED_BASE, REFLECTIONS_ON_THE_JOURNEY_BASE, AWAKENING_DIVINE_SPARK_MULT, UNIFIED_THEORY_OF_MAGIC_EFFECT, DEFIED_THE_GODS_SPARK_MULT, SUPPLY_LINES_EFFECT } from "./simulation_constants.js";
 import { SkillType } from "./skills.js";
 export var PerkType;
 (function (PerkType) {
@@ -37,7 +38,24 @@ export var PerkType;
     PerkType[PerkType["UnifiedTheoryOfMagic"] = 27] = "UnifiedTheoryOfMagic";
     PerkType[PerkType["Headmaster"] = 28] = "Headmaster";
     PerkType[PerkType["DragonSlayer"] = 29] = "DragonSlayer";
-    PerkType[PerkType["Count"] = 30] = "Count";
+    PerkType[PerkType["UnderstandingTheReset"] = 30] = "UnderstandingTheReset";
+    PerkType[PerkType["OvercameFearOfSkydiving"] = 31] = "OvercameFearOfSkydiving";
+    PerkType[PerkType["DestroyedTheRing"] = 32] = "DestroyedTheRing";
+    PerkType[PerkType["GazedBeyondTheVeil"] = 33] = "GazedBeyondTheVeil";
+    PerkType[PerkType["UndergroundForge"] = 34] = "UndergroundForge";
+    PerkType[PerkType["UnderstandingLeviathan"] = 35] = "UnderstandingLeviathan";
+    PerkType[PerkType["PurgedDemonicInfluences"] = 36] = "PurgedDemonicInfluences";
+    PerkType[PerkType["DefiedTheGods"] = 37] = "DefiedTheGods";
+    PerkType[PerkType["SurvivedTheVoid"] = 38] = "SurvivedTheVoid";
+    PerkType[PerkType["CommunedWithDamnedSouls"] = 39] = "CommunedWithDamnedSouls";
+    PerkType[PerkType["DivinePower"] = 40] = "DivinePower";
+    PerkType[PerkType["SecondInCommand"] = 41] = "SecondInCommand";
+    PerkType[PerkType["SupplyLines"] = 42] = "SupplyLines";
+    PerkType[PerkType["FinalRitual"] = 43] = "FinalRitual";
+    PerkType[PerkType["ReturnedHeraldHead"] = 44] = "ReturnedHeraldHead";
+    PerkType[PerkType["AvoidedGodlyRevenge"] = 45] = "AvoidedGodlyRevenge";
+    PerkType[PerkType["Ascended"] = 46] = "Ascended";
+    PerkType[PerkType["Count"] = 47] = "Count";
 })(PerkType || (PerkType = {}));
 export function getPerkNameWithEmoji(type) {
     const perk = PERKS[type];
@@ -61,7 +79,7 @@ export class PerkDefinition {
         return skill_modifiers + custom; // Whichever has length
     }
 }
-function getReflectionsOnTheJourneyExponent() {
+export function getReflectionsOnTheJourneyExponent() {
     return hasPrestigeUnlock(PrestigeUnlockType.LookInTheMirror) ? REFLECTIONS_ON_THE_JOURNEY_BOOSTED_BASE : REFLECTIONS_ON_THE_JOURNEY_BASE;
 }
 export const PERKS = [
@@ -122,7 +140,7 @@ export const PERKS = [
     new PerkDefinition({
         enum: PerkType.MinorTimeCompression,
         name: `Minor Time Compression`,
-        get_custom_tooltip: () => { return `Tasks reps that are completed instantly (in a single ⏰Tick) now cost 80% less ${ENERGY_TEXT}<br>Zones where all Tasks are instant without using Items are completed for free in a single ⏰Tick when doing an ${ENERGY_TEXT} Reset`; },
+        get_custom_tooltip: () => { return `Tasks reps that are completed instantly (in a single ⏰Tick) now cost 80% less ${ENERGY_TEXT}<br>Zones where all Tasks are instant without using Items are completed for free in a single ⏰Tick when doing an ${ENERGY_TEXT} Reset<br>This gives all the benefits doing those Tasks manually would have`; },
         icon: `⌚`,
     }),
     new PerkDefinition({
@@ -164,7 +182,7 @@ export const PERKS = [
         enum: PerkType.SunkenTreasure,
         name: `Sunken Treasure`,
         skill_modifiers: new PerkSkillModifierList([
-            [SkillType.Survival, 0.3],
+            [SkillType.Search, 0.3],
             [SkillType.Fortitude, 0.3],
         ]),
         icon: `⚓`,
@@ -173,7 +191,7 @@ export const PERKS = [
         enum: PerkType.LostTemple,
         name: `Found Lost Temple`,
         skill_modifiers: new PerkSkillModifierList([
-            [SkillType.Druid, 0.5]
+            [SkillType.Magic, 0.5]
         ]),
         icon: `🏯`,
     }),
@@ -189,7 +207,16 @@ export const PERKS = [
     new PerkDefinition({
         enum: PerkType.ReflectionsOnTheJourney,
         name: `Reflections on the Journey`,
-        get_custom_tooltip: () => { return `Reduce ${ENERGY_TEXT} drain based on the highest Zone reached<br>In each Zone ${ENERGY_TEXT} consumption is reduced ${((1 - getReflectionsOnTheJourneyExponent()) * 100).toFixed(0)}% compounding for each Zone you've reached past it<br>So Zone 12 has ${ENERGY_TEXT} cost multiplied by ${getReflectionsOnTheJourneyExponent()}^2 if the highest Zone reached is 14`; },
+        get_custom_tooltip: () => {
+            const reduction_per_zone = 1 - getReflectionsOnTheJourneyExponent();
+            const current_reduction = 1 - calcReflectionsOnTheJourneyMult(GAMESTATE.current_zone);
+            let tooltip = `Reduce ${ENERGY_TEXT} drain based on the highest Zone reached`;
+            tooltip += `<br>In each Zone ${ENERGY_TEXT} consumption is reduced ${(reduction_per_zone * 100).toFixed(0)}% compounding for each Zone you've reached past it`;
+            tooltip += `<br>So Zone 12 has ${ENERGY_TEXT} cost multiplied by ${getReflectionsOnTheJourneyExponent()}^2 if the highest Zone reached is 14`;
+            tooltip += `<br><br>Highest Zone reached: ${GAMESTATE.highest_zone + 1}`;
+            tooltip += `<br>Effect in current Zone: ${(current_reduction * 100).toFixed()}% reduction`;
+            return tooltip;
+        },
         icon: `🕰️`,
     }),
     new PerkDefinition({
@@ -206,7 +233,7 @@ export const PERKS = [
         name: `Deep Sea Diving`,
         skill_modifiers: new PerkSkillModifierList([
             [SkillType.Search, 0.3],
-            [SkillType.Druid, 0.3],
+            [SkillType.Magic, 0.3],
         ]),
         icon: `🤿`,
     }),
@@ -236,13 +263,13 @@ export const PERKS = [
     new PerkDefinition({
         enum: PerkType.Awakening,
         name: `Awakening`,
-        get_custom_tooltip: () => { return `Improves ${DIVINE_SPARK_TEXT} gain by ${formatNumber(AWAKENING_DIVINE_SPARK_MULT * 100)}%`; },
+        get_custom_tooltip: () => { return `Improves ${DIVINE_SPARK_TEXT} gain by ${formatPercentage(AWAKENING_DIVINE_SPARK_MULT)}`; },
         icon: `💤`,
     }),
     new PerkDefinition({
         enum: PerkType.MajorTimeCompression,
         name: `Major Time Compression`,
-        get_custom_tooltip: () => { return `Tasks with instant reps now complete the whole Task in a single ⏰Tick, rather than a single ⏰Tick per rep<br>This also means the ${ENERGY_TEXT} cost is that of a single ⏰Tick<br>Reduces the real-world time for non-instant Tasks by 50% (does not affect ${ENERGY_TEXT} use)`; },
+        get_custom_tooltip: () => { return `Tasks with instant reps now complete the whole Task in a single ⏰Tick, rather than a single ⏰Tick per rep<br>This also means the ${ENERGY_TEXT} cost is that of a single ⏰Tick<br>Reduces the real-world time for non-instant Tasks by 33% (does not affect ${ENERGY_TEXT} use)`; },
         icon: `⏰`,
     }),
     new PerkDefinition({
@@ -256,7 +283,6 @@ export const PERKS = [
     new PerkDefinition({
         enum: PerkType.DreamPrism,
         name: `Dream Prism`,
-        get_custom_tooltip: () => { return `Improves ${getSkillString(SkillType.Magic)} and ${getSkillString(SkillType.Travel)} Task speed by 30%`; },
         skill_modifiers: new PerkSkillModifierList([
             [SkillType.Magic, 0.3],
             [SkillType.Travel, 0.3],
@@ -274,7 +300,16 @@ export const PERKS = [
     new PerkDefinition({
         enum: PerkType.UnifiedTheoryOfMagic,
         name: `Unified Theory of Magic`,
-        get_custom_tooltip: () => { return `Each Zone fully completed in this Prestige increases Task Speed 2%<br>For instance, having fully completed the 15th Zone would speed up Task speed 1.02^15 = 35%<br>Note that it's based on your highest fully completed, so you can skip fully completing earlier Zones if you want`; },
+        get_custom_tooltip: () => {
+            const example_effect = Math.pow(1 + UNIFIED_THEORY_OF_MAGIC_EFFECT, 15);
+            let tooltip = `Each Zone fully completed in this Prestige increases Task Speed ${(UNIFIED_THEORY_OF_MAGIC_EFFECT * 100).toFixed(0)}%`;
+            tooltip += `<br>For instance, having fully completed the 15th Zone would speed up Task speed ${1 + UNIFIED_THEORY_OF_MAGIC_EFFECT}^15 = ${(example_effect * 100 - 100).toFixed(0)}%`;
+            tooltip += `<br>Note that it's based on your highest fully completed, so you can skip fully completing earlier Zones if you want`;
+            tooltip += `<br><br>Highest Zone fully completed currently: ${GAMESTATE.highest_zone_fully_completed + 1}`;
+            const effect = Math.pow(1 + UNIFIED_THEORY_OF_MAGIC_EFFECT, GAMESTATE.highest_zone_fully_completed + 1);
+            tooltip += `<br>Current effect: +${(effect * 100 - 100).toFixed(0)}% Task speed`;
+            return tooltip;
+        },
         icon: `📜`,
     }),
     new PerkDefinition({
@@ -294,6 +329,150 @@ export const PERKS = [
             [SkillType.Charisma, 0.3],
         ]),
         icon: `🐉`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.UnderstandingTheReset,
+        name: `Understanding of the Reset`,
+        get_custom_tooltip: () => { return `When you run out of ${ENERGY_TEXT} and reincarnate you keep half your remaining Items (rounded up)<br>This means you can use more Items in a run than just those gained in that specific run`; },
+        icon: `🔁`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.OvercameFearOfSkydiving,
+        name: `Overcame Fear of Skydiving`,
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Combat, 0.3],
+            [SkillType.Fortitude, 0.3],
+        ]),
+        icon: `🪂`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.DestroyedTheRing,
+        name: `Destroyed the Ring`,
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Ascension, 1.0],
+            [SkillType.Charisma, 0.5],
+        ]),
+        icon: `💍`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.GazedBeyondTheVeil,
+        name: `Gazed Beyond the Veil`,
+        get_custom_tooltip: () => { return `Improves ${XP_TEXT} gain by 100%`; },
+        icon: `👀`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.UndergroundForge,
+        name: `Studied Underground Forge`,
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Crafting, 0.5],
+        ]),
+        icon: `⛏️`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.UnderstandingLeviathan,
+        name: `Understanding Leviathan`,
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Study, 0.3],
+            [SkillType.Combat, 0.3],
+        ]),
+        icon: `🐋`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.PurgedDemonicInfluences,
+        name: `Purged Demonic Influences`,
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Charisma, 0.3],
+            [SkillType.Fortitude, 0.3],
+        ]),
+        icon: `👹`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.DefiedTheGods,
+        name: `Defied the Gods`,
+        get_custom_tooltip: () => { return `Improves ${DIVINE_SPARK_TEXT} gain by ${formatPercentage(DEFIED_THE_GODS_SPARK_MULT)}`; },
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Ascension, 1.0],
+        ]),
+        icon: `🚫`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.SurvivedTheVoid,
+        name: `Survived the Void`,
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Ascension, 0.3],
+            [SkillType.Fortitude, 0.3],
+        ]),
+        icon: `⚫`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.CommunedWithDamnedSouls,
+        name: `Communed with Damned Souls`,
+        get_custom_tooltip: () => { return `Doubles ${ATTUNEMENT_TEXT} Gain`; },
+        icon: `👻`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.DivinePower,
+        name: `Divine Power`,
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Ascension, 0.25],
+            [SkillType.Combat, 0.25],
+            [SkillType.Magic, 0.25],
+            [SkillType.Study, 0.25],
+        ]),
+        icon: `☀️`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.SecondInCommand,
+        name: `Second in Command`,
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Charisma, 0.3],
+            [SkillType.Subterfuge, 0.3],
+            [SkillType.Search, 0.3],
+        ]),
+        icon: `🙇‍♂️`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.SupplyLines,
+        name: `Supply Lines`,
+        get_custom_tooltip: () => { return `Increases ${ENERGY_TEXT} Gain from Items by ${formatPercentage(SUPPLY_LINES_EFFECT)}`; },
+        icon: `🛣️`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.FinalRitual,
+        name: `Prepared Final Ritual`,
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Ascension, 1.0],
+            [SkillType.Study, 1.0],
+            [SkillType.Magic, 1.0],
+        ]),
+        icon: `✨`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.ReturnedHeraldHead,
+        name: `Returned Herald's Head`,
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Charisma, 0.3],
+            [SkillType.Combat, 0.3],
+            [SkillType.Ascension, 0.3],
+        ]),
+        icon: `🤕`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.AvoidedGodlyRevenge,
+        name: `Avoided Godly Revenge`,
+        skill_modifiers: new PerkSkillModifierList([
+            [SkillType.Subterfuge, 0.3],
+            [SkillType.Fortitude, 0.3],
+            [SkillType.Charisma, 0.3],
+            [SkillType.Ascension, 0.3],
+        ]),
+        icon: `🌋`,
+    }),
+    new PerkDefinition({
+        enum: PerkType.Ascended,
+        name: `Ascended`,
+        get_custom_tooltip: () => { return `Doubles ${DIVINE_SPARK_TEXT} gain`; },
+        icon: `👼`,
     }),
 ];
 //# sourceMappingURL=perks.js.map

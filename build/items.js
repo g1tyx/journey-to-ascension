@@ -14,7 +14,7 @@ export var ItemType;
     ItemType[ItemType["Book"] = 6] = "Book";
     ItemType[ItemType["ScrollOfHaste"] = 7] = "ScrollOfHaste";
     ItemType[ItemType["GoblinWaraxe"] = 8] = "GoblinWaraxe";
-    ItemType[ItemType["FiremakingKit"] = 9] = "FiremakingKit";
+    ItemType[ItemType["CampingEquipment"] = 9] = "CampingEquipment";
     ItemType[ItemType["Reagents"] = 10] = "Reagents";
     ItemType[ItemType["MagicalRoots"] = 11] = "MagicalRoots";
     ItemType[ItemType["GoblinTreasure"] = 12] = "GoblinTreasure";
@@ -37,7 +37,21 @@ export var ItemType;
     ItemType[ItemType["CaveInsects"] = 29] = "CaveInsects";
     ItemType[ItemType["MagicalVessel"] = 30] = "MagicalVessel";
     ItemType[ItemType["MagicRing"] = 31] = "MagicRing";
-    ItemType[ItemType["Count"] = 32] = "Count";
+    ItemType[ItemType["BottledLightning"] = 32] = "BottledLightning";
+    ItemType[ItemType["HeatEssence"] = 33] = "HeatEssence";
+    ItemType[ItemType["DivineNotes"] = 34] = "DivineNotes";
+    ItemType[ItemType["GriffinQuill"] = 35] = "GriffinQuill";
+    ItemType[ItemType["WingsOfShadow"] = 36] = "WingsOfShadow";
+    ItemType[ItemType["RitualSymbol"] = 37] = "RitualSymbol";
+    ItemType[ItemType["Glasses"] = 38] = "Glasses";
+    ItemType[ItemType["Light"] = 39] = "Light";
+    ItemType[ItemType["MadContraption"] = 40] = "MadContraption";
+    ItemType[ItemType["Recording"] = 41] = "Recording";
+    ItemType[ItemType["DivineSpark"] = 42] = "DivineSpark";
+    ItemType[ItemType["VoidEssence"] = 43] = "VoidEssence";
+    ItemType[ItemType["ArmyFood"] = 44] = "ArmyFood";
+    ItemType[ItemType["RitualSacrifice"] = 45] = "RitualSacrifice";
+    ItemType[ItemType["Count"] = 46] = "Count";
 })(ItemType || (ItemType = {}));
 export class ItemDefinition {
     enum = ItemType.Count;
@@ -74,7 +88,8 @@ export class ItemDefinition {
     }
 }
 export const HASTE_MULT = 5;
-export const MAGIC_RING_MULT = 3;
+export const MAGIC_RING_MULT = 5;
+export const BOTTLED_LIGHTNING_MULT = 2;
 export const ITEMS = [
     new ItemDefinition({
         enum: ItemType.Food, name: `Food`, name_plural: `Food`,
@@ -94,7 +109,7 @@ export const ITEMS = [
         enum: ItemType.Coin, name: `Coin`, name_plural: `Coins`,
         icon: `💰`,
         skill_modifiers: new ItemSkillModifierList([
-            [SkillType.Charisma, 0.15]
+            [SkillType.Charisma, 0.2]
         ]),
     }),
     new ItemDefinition({
@@ -110,7 +125,8 @@ export const ITEMS = [
         icon: `📦`,
         skill_modifiers: new ItemSkillModifierList([
             [SkillType.Subterfuge, 0.15],
-            [SkillType.Combat, 0.1]
+            [SkillType.Combat, 0.1],
+            [SkillType.Fortitude, 0.1],
         ]),
     }),
     new ItemDefinition({
@@ -118,20 +134,21 @@ export const ITEMS = [
         icon: `🎒`,
         skill_modifiers: new ItemSkillModifierList([
             [SkillType.Travel, 0.1],
-            [SkillType.Survival, 0.1]
+            [SkillType.Fortitude, 0.1]
         ]),
     }),
     new ItemDefinition({
         enum: ItemType.Book, name: `Book`, name_plural: `Books`,
         icon: `📚`,
         skill_modifiers: new ItemSkillModifierList([
-            [SkillType.Study, 0.1]
+            [SkillType.Study, 0.1],
+            [SkillType.Magic, 0.1]
         ]),
     }),
     new ItemDefinition({
         enum: ItemType.ScrollOfHaste, name: `Scroll of Haste`, name_plural: `Scrolls of Haste`,
         icon: HASTE_EMOJI,
-        get_custom_tooltip: () => { return `The next Task rep you start is ${HASTE_MULT}x as fast<br><br>Sure would be handy to have more than one of these`; },
+        get_custom_tooltip: () => { return `The next Task rep you start is ${HASTE_MULT}x as fast`; },
         get_custom_effect_text: (amount) => { return `Next ${amount} Task reps are ${HASTE_MULT}x as fast`; },
         on_consume: (amount) => { GAMESTATE.queued_scrolls_of_haste += amount; },
     }),
@@ -143,10 +160,10 @@ export const ITEMS = [
         ]),
     }),
     new ItemDefinition({
-        enum: ItemType.FiremakingKit, name: `Firemaking Kit`, name_plural: `Firemaking Kits`,
-        icon: `🔥`,
+        enum: ItemType.CampingEquipment, name: `Camping Equipment`, name_plural: `Camping Equipment`,
+        icon: `⛺`,
         skill_modifiers: new ItemSkillModifierList([
-            [SkillType.Survival, 0.15]
+            [SkillType.Fortitude, 0.15]
         ]),
     }),
     new ItemDefinition({
@@ -155,16 +172,14 @@ export const ITEMS = [
         skill_modifiers: new ItemSkillModifierList([
             [SkillType.Magic, 0.2],
             [SkillType.Crafting, 0.1],
-            [SkillType.Druid, 0.1]
         ]),
     }),
     new ItemDefinition({
         enum: ItemType.MagicalRoots, name: `Magical Root`, name_plural: `Magical Roots`,
         icon: `🌲`,
         skill_modifiers: new ItemSkillModifierList([
-            [SkillType.Survival, 0.1],
+            [SkillType.Fortitude, 0.2],
             [SkillType.Magic, 0.1],
-            [SkillType.Druid, 0.1]
         ]),
     }),
     new ItemDefinition({
@@ -172,7 +187,7 @@ export const ITEMS = [
         icon: `💎`,
         skill_modifiers: new ItemSkillModifierList([
             [SkillType.Subterfuge, 0.5],
-            [SkillType.Survival, 0.5]
+            [SkillType.Magic, 0.5]
         ]),
     }),
     new ItemDefinition({
@@ -194,8 +209,7 @@ export const ITEMS = [
         enum: ItemType.BanditWeapons, name: `Cactus`, name_plural: `Cactuses`,
         icon: `🌵`,
         skill_modifiers: new ItemSkillModifierList([
-            [SkillType.Survival, 0.1],
-            [SkillType.Fortitude, 0.1]
+            [SkillType.Fortitude, 0.15]
         ]),
     }),
     new ItemDefinition({
@@ -211,7 +225,7 @@ export const ITEMS = [
         icon: `🐺`,
         skill_modifiers: new ItemSkillModifierList([
             [SkillType.Charisma, 0.2],
-            [SkillType.Survival, 0.2]
+            [SkillType.Fortitude, 0.2]
         ]),
     }),
     new ItemDefinition({
@@ -219,7 +233,7 @@ export const ITEMS = [
         icon: `💧`,
         skill_modifiers: new ItemSkillModifierList([
             [SkillType.Magic, 0.2],
-            [SkillType.Survival, 0.1]
+            [SkillType.Fortitude, 0.1]
         ]),
     }),
     new ItemDefinition({
@@ -241,7 +255,9 @@ export const ITEMS = [
         icon: `🦴`,
         skill_modifiers: new ItemSkillModifierList([
             [SkillType.Search, 0.2],
-            [SkillType.Druid, 0.2]
+            [SkillType.Magic, 0.2],
+            [SkillType.Ascension, 0.1],
+            [SkillType.Travel, 0.1],
         ]),
     }),
     new ItemDefinition({
@@ -276,7 +292,7 @@ export const ITEMS = [
         enum: ItemType.MagicEssence, name: `Magical Essence`, name_plural: `Magical Essences`,
         icon: `🌠`,
         skill_modifiers: new ItemSkillModifierList([
-            [SkillType.Magic, 3]
+            [SkillType.Magic, 4]
         ]),
     }),
     new ItemDefinition({
@@ -323,6 +339,116 @@ export const ITEMS = [
         get_custom_effect_text: (amount) => { return `Next ${amount} Task reps give ${MAGIC_RING_MULT}x as much XP`; },
         on_consume: (amount) => { GAMESTATE.queued_magic_rings += amount; },
     }),
+    new ItemDefinition({
+        enum: ItemType.BottledLightning, name: `Bottled Lightning`, name_plural: `Bottled Lightning`,
+        icon: `⚡`,
+        get_custom_tooltip: () => { return `The next Boss Task you start is ${BOTTLED_LIGHTNING_MULT}x as fast<br>This stacks with Scroll of Haste`; },
+        get_custom_effect_text: (amount) => { return `Next ${amount} Boss Tasks are ${BOTTLED_LIGHTNING_MULT}x as fast`; },
+        on_consume: (amount) => { GAMESTATE.queued_lightning += amount; },
+    }),
+    new ItemDefinition({
+        enum: ItemType.HeatEssence, name: `Heat Essence`, name_plural: `Heat Essence`,
+        icon: `🔥`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Charisma, 1.0]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.DivineNotes, name: `Divine Note`, name_plural: `Divine Notes`,
+        icon: `📜`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Study, 0.3],
+            [SkillType.Search, 0.3],
+            [SkillType.Travel, 0.1],
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.GriffinQuill, name: `Griffin Quill`, name_plural: `Griffin Quills`,
+        icon: `🕊️`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Study, 1.0]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.WingsOfShadow, name: `Wings of Shadow`, name_plural: `Wings of Shadow`,
+        icon: `🦇`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Ascension, 5.0],
+            [SkillType.Travel, 1.0],
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.RitualSymbol, name: `Ritual Symbol`, name_plural: `Ritual Symbols`,
+        icon: `☯️`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Ascension, 1.0]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.RitualSymbol, name: `Glasses`, name_plural: `Glasses`,
+        icon: `👓`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Search, 1.0]
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.Light, name: `Light`, name_plural: `Light`,
+        icon: `💡`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Search, 0.5],
+            [SkillType.Travel, 0.5],
+            [SkillType.Fortitude, 0.5],
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.MadContraption, name: `Mad Contraption`, name_plural: `Mad Contraptions`,
+        icon: `🤪`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Study, 1],
+            [SkillType.Crafting, 1],
+            [SkillType.Combat, 1],
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.Recording, name: `Recording`, name_plural: `Recordings`,
+        icon: `📼`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Charisma, 1],
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.DivineSpark, name: `Divine Spark`, name_plural: `Divine Sparks`,
+        icon: `✨`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Ascension, 20],
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.VoidEssence, name: `Void Essence`, name_plural: `Void Essence`,
+        icon: `⚫`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Magic, 3],
+            [SkillType.Study, 3],
+            [SkillType.Subterfuge, 3],
+        ]),
+    }),
+    new ItemDefinition({
+        enum: ItemType.ArmyFood, name: `Army Food`, name_plural: `Army Food`,
+        icon: `🍱`,
+        get_custom_tooltip: () => { return `Gives ${calcItemEnergyGain(15)} ${ENERGY_TEXT} each<br>Can take you above your Max Energy<br><br>Right-click to use all`; },
+        get_custom_effect_text: (amount) => { return `Gained ${amount * calcItemEnergyGain(15)} ${ENERGY_TEXT}`; },
+        on_consume: (amount) => { GAMESTATE.current_energy += calcItemEnergyGain(15) * amount; },
+    }),
+    new ItemDefinition({
+        enum: ItemType.RitualSacrifice, name: `Ritual Sacrifice`, name_plural: `Ritual Sacrifice`,
+        icon: `🩸`,
+        skill_modifiers: new ItemSkillModifierList([
+            [SkillType.Magic, 5],
+            [SkillType.Ascension, 5],
+            [SkillType.Combat, 5],
+        ]),
+    }),
 ];
-export const ARTIFACTS = [ItemType.ScrollOfHaste, ItemType.Dreamcatcher, ItemType.MagicRing];
+export const ARTIFACTS = [ItemType.ScrollOfHaste, ItemType.Dreamcatcher, ItemType.MagicRing, ItemType.BottledLightning];
+export const NOTE_ITEMS = [ItemType.ScrollOfHaste, ItemType.Book, ItemType.CraftingRecipe, ItemType.DivineNotes, ItemType.GriffinQuill];
 //# sourceMappingURL=items.js.map

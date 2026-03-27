@@ -12,4 +12,6 @@ export const HASTE_EMOJI = "🐇";
 export const HASTE_TEXT = `${HASTE_EMOJI}Haste`;
 export const TRAVEL_EMOJI = "🗺️";
 export const MINOR_TIME_COMPRESSION_EMOJI = "⌚";
+export const BOTTLED_LIGHTNING_EMOJI = "⚡";
+export const BOTTLED_LIGHTNING_TEXT = `${BOTTLED_LIGHTNING_EMOJI}Bottled Lightning`;
 //# sourceMappingURL=rendering_constants.js.map
