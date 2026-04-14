@@ -770,7 +770,7 @@ var cnItems = {
     "🚫Werewolf": "🚫狼人",
     "Drain is proportional to the time spent on a Task. The drain per unit time increases slightly per Zone": "消耗与任务耗时成正比，每进入一个区域，单位时间消耗会小幅提升",
     "Make Camping Equipment": "制作露营装备",
-    "": "",
+    "Pause on Block": "被阻挡时暂停",
     "": "",
     "": "",
     "": "",

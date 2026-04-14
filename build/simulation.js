@@ -12,7 +12,8 @@ const ZONE_SPEEDUP_BASE = 1.05;
 export const BOSS_MAX_ENERGY_DISPARITY = 5;
 const STARTING_ENERGY = 100;
 const DEFAULT_TICK_RATE = 66.6;
-export const SAVE_VERSION = "1.0.0";
+export const SAVE_VERSION = "1.1.1";
+const TASK_STARTED_PROGRESS = 0.01;
 // MARK: Skills
 export class Skill {
     type = SkillType.Count;
@@ -207,7 +208,7 @@ function calcTaskEnergyCost(task, hasted, lightning) {
     return ticks * energy_per_tick;
 }
 function isSingleTickTaskImpl(progress, cost) {
-    return progress >= cost;
+    return (progress + TASK_STARTED_PROGRESS) >= cost;
 }
 function isSingleTickTask(task) {
     const progress = calcTaskProgressPerTick(task);
@@ -298,7 +299,7 @@ export function applyTaskRepStartEffects(task) {
     if (task.task_definition.use_item != ItemType.Count) {
         consumeItem(task.task_definition.use_item, 1);
     }
-    task.progress = Math.max(task.progress, 0.01); // Slight progress to ensure it counts as started
+    task.progress = Math.max(task.progress, TASK_STARTED_PROGRESS); // Slight progress to ensure it counts as started
 }
 export function clickTask(task) {
     if (GAMESTATE.active_task == task) {
@@ -462,12 +463,19 @@ function doMasteryOfTimeTaskCompletion() {
         // Gets handled at the end of the zone skipping so we don't spam unnecessary notifications
         return;
     }
+    if ((GAMESTATE.current_zone + 1) >= GAMESTATE.automation_end) {
+        // Let the user deal with it manually when it's not automated
+        return;
+    }
+    // Artifacts shouldn't affect this
+    const old_queued_haste = GAMESTATE.queued_scrolls_of_haste;
+    const old_queued_rings = GAMESTATE.queued_magic_rings;
+    const old_queued_lightning = GAMESTATE.queued_lightning;
     let num_complete = 0;
     for (const task of GAMESTATE.tasks) {
         if (isTaskFullyCompleted(task)) {
             continue;
         }
-        // TODO - Ignore artifacts
         if (!isSingleTickTask(task)) {
             continue;
         }
@@ -483,6 +491,9 @@ function doMasteryOfTimeTaskCompletion() {
         const event = new RenderEvent(EventType.SkippedTasks, context);
         GAMESTATE.queueRenderEvent(event);
     }
+    GAMESTATE.queued_scrolls_of_haste = old_queued_haste;
+    GAMESTATE.queued_magic_rings = old_queued_rings;
+    GAMESTATE.queued_lightning = old_queued_lightning;
 }
 // MARK: Energy
 function modifyEnergy(delta) {
@@ -497,23 +508,31 @@ export function calcReflectionsOnTheJourneyMult(zone) {
     const base = getReflectionsOnTheJourneyExponent();
     return Math.pow(base, zone_diff);
 }
-export function calcEnergyDrainPerTick(task, is_single_tick) {
+export function calcEnergyDrainPerTickInZone(zone) {
     let drain = 1;
+    if (hasPerk(PerkType.HighAltitudeClimbing)) {
+        drain *= 0.8;
+    }
+    if (hasPerk(PerkType.ReflectionsOnTheJourney)) {
+        drain *= calcReflectionsOnTheJourneyMult(zone);
+    }
+    if (hasPerk(PerkType.MajorTimeCompression)) {
+        drain *= MAJOR_TIME_COMPRESSION_EFFECT;
+    }
+    drain *= Math.pow(ZONE_SPEEDUP_BASE, zone);
+    return drain;
+}
+export function calcEnergyDrainPerTick(task, is_single_tick) {
+    let drain = calcEnergyDrainPerTickInZone(task.task_definition.zone_id);
     if (is_single_tick && hasPrestigeUnlock(PrestigeUnlockType.MasteryOfTime)) {
         return 0;
     }
     if (is_single_tick && hasPerk(PerkType.MinorTimeCompression)) {
         drain *= 0.2;
     }
-    if (hasPerk(PerkType.HighAltitudeClimbing)) {
-        drain *= 0.8;
-    }
-    if (hasPerk(PerkType.ReflectionsOnTheJourney)) {
-        drain *= calcReflectionsOnTheJourneyMult(task.task_definition.zone_id);
-    }
-    drain *= Math.pow(ZONE_SPEEDUP_BASE, task.task_definition.zone_id);
-    if (!is_single_tick && hasPerk(PerkType.MajorTimeCompression)) {
-        drain *= MAJOR_TIME_COMPRESSION_EFFECT;
+    if (is_single_tick && hasPerk(PerkType.MajorTimeCompression)) {
+        // Make up for it always getting applied in calcEnergyDrainPerTickInZone
+        drain /= MAJOR_TIME_COMPRESSION_EFFECT;
     }
     return drain;
 }
@@ -620,7 +639,7 @@ function autoUseItems() {
             continue;
         }
         if (value > 0) {
-            clickItem(key, true);
+            useItem(key, value);
             disableItemUndo(); // It'd just cause weird flashing
         }
     }
@@ -855,6 +874,9 @@ function pickNextTaskInAutomationQueue() {
                 continue;
             }
             if (isTaskDisabledWithoutBeingFinished(task)) {
+                if (GAMESTATE.automation_skip_blocked) {
+                    continue;
+                }
                 return null; // Better to stop automating than having it fuck up by skipping a Task
             }
             if (!task.enabled) {
@@ -1192,6 +1214,7 @@ export class Gamestate {
     automation_mode = AutomationMode.Off;
     automation_prios = new Map();
     automation_end = 99;
+    automation_skip_blocked = false;
     auto_use_items = false;
     undo_item = [ItemType.Count, 0];
     manual_tooltips = false;

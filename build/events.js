@@ -19,7 +19,8 @@ export var EventType;
     EventType[EventType["NewPrestigeLayer"] = 12] = "NewPrestigeLayer";
     EventType[EventType["SkippedZones"] = 13] = "SkippedZones";
     EventType[EventType["SkippedTasks"] = 14] = "SkippedTasks";
-    EventType[EventType["Count"] = 15] = "Count";
+    EventType[EventType["UsedItems"] = 15] = "UsedItems";
+    EventType[EventType["Count"] = 16] = "Count";
 })(EventType || (EventType = {}));
 export class EventContext {
 }
@@ -41,6 +42,9 @@ export class GainedPerkContext extends EventContext {
 }
 export class UsedItemContext extends EventContext {
     item = ItemType.Count;
+    count = 0;
+}
+export class UsedItemsContext extends EventContext {
     count = 0;
 }
 export class UnlockedTaskContext extends EventContext {

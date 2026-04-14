@@ -118,7 +118,7 @@ export const PRESTIGE_UNLOCKABLES = [
         type: PrestigeUnlockType.MasteryOfTime,
         layer: PrestigeLayer.TranscendHumanity,
         name: "Mastery of Time",
-        get_description: () => { return `Permanently unlocks the ${getPerkNameWithEmoji(PerkType.MinorTimeCompression)} and ${getPerkNameWithEmoji(PerkType.MajorTimeCompression)} Perks<br>1-tick Tasks are now free<br>1-tick Tasks (except Travel) are now automatically completed when you enter a Zone`; },
+        get_description: () => { return `Permanently unlocks the ${getPerkNameWithEmoji(PerkType.MinorTimeCompression)} and ${getPerkNameWithEmoji(PerkType.MajorTimeCompression)} Perks<br>1-tick Tasks are now free<br>1-tick Tasks (except Travel) are now automatically completed when you enter a Zone<br>The auto-completion is not applied to Zones you've not set to be automated (in case you want to do things like use a Magic Ring)`; },
         cost: 40000
     },
     {
@@ -147,7 +147,7 @@ export const PRESTIGE_UNLOCKABLES = [
         layer: PrestigeLayer.EmbraceDivinity,
         name: "Crafting Breakthrough",
         get_description: () => { return `Makes ${ATTUNEMENT_TEXT} apply to ${getSkillString(SkillType.Crafting)}`; },
-        cost: 3_000_000
+        cost: 2_000_000
     },
     {
         type: PrestigeUnlockType.GodlyTravel,

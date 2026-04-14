@@ -1,9 +1,9 @@
 import { Task, TaskDefinition, ZONES, TaskType, PERKS_BY_ZONE, ITEMS_BY_ZONE } from "./zones.js";
-import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus } from "./simulation.js";
+import { clickTask, Skill, calcSkillXpNeeded, calcSkillXpNeededAtLevel, calcTaskProgressMultiplier, calcSkillXp, calcEnergyDrainPerTick, clickItem, calcTaskCost, calcSkillTaskProgressMultiplier, getSkill, hasPerk, doEnergyReset, calcSkillTaskProgressMultiplierFromLevel, saveGame, SAVE_LOCATION, toggleRepeatTasks, calcAttunementGain, calcPowerGain, toggleAutomation, AutomationMode, calcPowerSpeedBonusAtLevel, calcAttunementSpeedBonusAtLevel, calcSkillTaskProgressWithoutLevel, setAutomationMode, hasUnlockedPrestige, calcDivineSparkGain, getPrestigeRepeatableLevel, hasPrestigeUnlock, calcPrestigeRepeatableCost, addPrestigeUnlock, increasePrestigeRepeatableLevel, doPrestige, knowsPerk, calcAttunementSkills, getPrestigeGainExponent, calcTickRate, willCompleteAllRepsInOneTick, isTaskDisabledDueToTooStrongBoss, BOSS_MAX_ENERGY_DISPARITY, undoItemUse, gatherItemBonuses, gatherPerkBonuses, getPowerSkills, SAVE_VERSION, setHasGottenPrepRunHint, calcDivineSparkGainFromHighestZone, knowsItem, setHasGottenBossHint, setAutomationEndZone, isTaskDisabledDueToMissingItem, isTaskDisabledWithoutBeingFinished, getSpiteTheGodsSkills, calcSpiteTheGodsBonus, calcEnergyDrainPerTickInZone } from "./simulation.js";
 import { GAMESTATE, RENDERING, resetSave } from "./game.js";
 import { ItemType, ItemDefinition, ITEMS, HASTE_MULT, ARTIFACTS, MAGIC_RING_MULT, BOTTLED_LIGHTNING_MULT } from "./items.js";
 import { PerkDefinition, PerkType, PERKS, getPerkNameWithEmoji } from "./perks.js";
-import { EventType, GainedPerkContext, HighestZoneContext, RenderEvent, SkillUpContext, SkippedTasksContext, UnlockedSkillContext, UnlockedTaskContext, UsedItemContext } from "./events.js";
+import { EventType, GainedPerkContext, HighestZoneContext, RenderEvent, SkillUpContext, SkippedTasksContext, UnlockedSkillContext, UnlockedTaskContext, UsedItemContext, UsedItemsContext } from "./events.js";
 import { SKILL_DEFINITIONS, SkillDefinition, SkillType } from "./skills.js";
 import { ATTUNEMENT_TEXT, BOTTLED_LIGHTNING_TEXT, DIVINE_SPARK_TEXT, ENERGY_TEXT, HASTE_TEXT, POWER_TEXT, TRAVEL_EMOJI, XP_TEXT } from "./rendering_constants.js";
 import { PRESTIGE_UNLOCKABLES, PRESTIGE_REPEATABLES, PrestigeRepeatableType, DIVINE_KNOWLEDGE_MULT, DIVINE_APPETITE_ENERGY_ITEM_BOOST_MULT, GOTTA_GO_FAST_BASE, DIVINE_LIGHTNING_EXPONENT_INCREASE, TRANSCENDANT_APTITUDE_MULT, ENERGIZED_INCREASE, DEENERGIZED_BASE, PrestigeUnlockType, ENERGIZED_PERK_INCREASE, MANDATORY_SCHMANDATORY_MULT, DIVINE_ATTUNEMENT_BASE, DIVINER_KNOWLEDGE_MULT, GODLY_TRAVEL_MULT } from "./prestige_upgrades.js";
@@ -1444,6 +1444,18 @@ function setupSettings() {
     setupTooltip(manual_tooltips_button, function () { return GAMESTATE.manual_tooltips ? "Switch to Manual Tooltips" : "Switch to Automatic Tooltips"; }, function () {
         return "With Manual Tooltips enabled, tooltips only show up while CTRL is held";
     });
+    const skip_blocked_button = settings_div.querySelector("#skip-blocked");
+    if (!skip_blocked_button) {
+        console.error("No skip-blocked button");
+        return;
+    }
+    skip_blocked_button.addEventListener("click", () => {
+        GAMESTATE.automation_skip_blocked = !GAMESTATE.automation_skip_blocked;
+        updateSettingsDisplay();
+    });
+    setupTooltip(skip_blocked_button, function () { return GAMESTATE.automation_skip_blocked ? "Switch to Pause on Blocked Tasks" : "Switch to Skip on Blocked Tasks"; }, function () {
+        return "When using Task Autmation, this setting decides what to do if the next queued Task is blocked (E.G., too strong a Boss). Will either pause the automation, or keep running automated with the Task skipped";
+    });
     updateSettingsDisplay();
 }
 function updateSettingsDisplay() {
@@ -1454,6 +1466,12 @@ function updateSettingsDisplay() {
         return;
     }
     manual_tooltips_button.textContent = GAMESTATE.manual_tooltips ? "Manual Tooltips" : "Auto Tooltips";
+    const skip_blocked_button = settings_div.querySelector("#skip-blocked");
+    if (!skip_blocked_button) {
+        console.error("No skip-blocked button");
+        return;
+    }
+    skip_blocked_button.textContent = GAMESTATE.automation_skip_blocked ? "Skip on Block" : "Pause on Block";
 }
 // MARK: Settings: Saves
 function setupPersistence(settings_div) {
@@ -1548,17 +1566,49 @@ function handleEvents() {
             messages.removeChild(message);
             RENDERING.message_contexts.delete(message);
         }
-        const context = event.context;
+        let context = event.context;
         if (event.type == EventType.UsedItem) {
             const new_item_context = context;
+            const is_artifact = ARTIFACTS.includes(new_item_context.item);
+            let event_count = 0;
             for (const [message, old_event] of RENDERING.message_contexts) {
-                if (old_event.type == event.type) {
+                if (old_event.type == EventType.UsedItem) {
                     const old_item_context = old_event.context;
                     if (old_item_context.item == new_item_context.item) {
                         new_item_context.count += old_item_context.count;
                         message_to_replace = message;
                     }
+                    else {
+                        event_count++;
+                    }
                 }
+                else if (old_event.type == EventType.UsedItems && !is_artifact) {
+                    const old_item_context = old_event.context;
+                    old_item_context.count += new_item_context.count;
+                    event.type = EventType.UsedItems;
+                    context = old_item_context;
+                    event.context = old_item_context;
+                    message_to_replace = message;
+                }
+            }
+            // Consolidate multiple item uses
+            if (event_count >= 3 && !is_artifact) {
+                let count = new_item_context.count;
+                for (const [message, old_event] of RENDERING.message_contexts) {
+                    if (old_event.type != EventType.UsedItem) {
+                        continue;
+                    }
+                    const old_item_context = old_event.context;
+                    if (ARTIFACTS.includes(old_item_context.item)) {
+                        continue;
+                    }
+                    count += old_item_context.count;
+                    removeMessage(message);
+                    message_to_replace = null;
+                }
+                context = { count: count };
+                event.type = EventType.UsedItems;
+                event.context = context;
             }
         }
         else if (event.type == EventType.SkillUp) {
@@ -1570,6 +1620,16 @@ function handleEvents() {
                         new_skill_context.levels_gained += old_skill_context.levels_gained;
                         message_to_replace = message;
                     }
+                }
+            }
+        }
+        else if (event.type == EventType.SkippedTasks) {
+            const new_context = context;
+            for (const [message, old_event] of RENDERING.message_contexts) {
+                if (old_event.type == event.type) {
+                    const old_context = old_event.context;
+                    new_context.tasks += old_context.tasks;
+                    message_to_replace = message;
                 }
             }
         }
@@ -1599,6 +1659,13 @@ function handleEvents() {
                     const plural = item_context.count > 1;
                     message_div.innerHTML = `Used ${item_context.count} ${getItemNameWithIcon(item_context.item, plural)}`;
                     message_div.innerHTML += `<br>${item.getEffectText(item_context.count)}`;
+                    recreateItemsIfNeeded();
+                    break;
+                }
+            case EventType.UsedItems:
+                {
+                    const item_context = context;
+                    message_div.innerHTML = `Used ${item_context.count} Items`;
                     recreateItemsIfNeeded();
                     break;
                 }
@@ -2075,6 +2142,9 @@ export class Rendering {
         setupTooltip(this.energy_element, function () { return `${ENERGY_TEXT} - ${GAMESTATE.current_energy.toFixed(0)}/${GAMESTATE.max_energy.toFixed(0)}`; }, function () {
             let tooltip = `${ENERGY_TEXT} goes down over time while you have a Task active`;
             tooltip += `<br>Drain is proportional to the time spent on a Task. The drain per unit time increases slightly per Zone`;
+            const tick_rate = 1000 / calcTickRate();
+            tooltip += `<br><br>⏰Ticks per second: ${formatNumber(tick_rate)}`;
+            tooltip += `<br>${ENERGY_TEXT} use per second: ${formatNumber(tick_rate * calcEnergyDrainPerTickInZone(GAMESTATE.current_zone))} (in Zone ${GAMESTATE.current_zone + 1})`;
             return tooltip;
         });
         this.tooltip_element = getElement("tooltip");
@@ -2145,6 +2215,7 @@ function setupZone() {
     const zone = ZONES[GAMESTATE.current_zone];
     if (zone) {
         zone_name.innerHTML = `Zone ${GAMESTATE.current_zone + 1} - ${zone.name}`;
+        setupTooltipStatic(zone_name, zone_name.innerHTML, `This is Zone ${GAMESTATE.current_zone + 1} of 30`);
     }
 }
 function hideTooltip() {

@@ -5,6 +5,25 @@ export class ChangelogEntry {
 }
 export const CHANGELOG = [
     {
+        version: "1.1.1",
+        date: "2026-04-12",
+        changes: "- Fixed Minor Time Compression's single-tick Task effect not working<br>"
+            + "- The Zone name now has a tooltip which shows the highest Zone (30)<br>"
+    },
+    {
+        version: "1.1.0",
+        date: "2026-04-10",
+        changes: "- Mastery of Time's Task skipping no longer applies to Zones you've not set to be automated (in case you want to do things like use a Magic Ring<br>"
+            + "- The Energy bar tooltip now shows ticks and Energy use per second<br>"
+            + "- Reduced the cost of Crafting Breakthrough by a third<br>"
+            + "- Made Z25 a bit easier<br>"
+            + "- Improved the XP of the training Tasks in Z30<br>"
+            + "- Added setting for what to do when the next Task can't be started when using Task Automation (E.G., due to a Boss being too strong). You can now choose between pausing automation, and skipping the Task<br>"
+            + "- Fixed Mastery of Time being affected by active Artifacts<br>"
+            + "- The Used Items notification now gets consolidated if you use more than 3 Items in short succession. Artifacts are unaffected<br>"
+            + "- The Tasks skipped notification now gets consolidated if you skip Tasks in multiple Zones in short succession<br>"
+    },
+    {
         version: "1.0.0",
         date: "2026-03-13",
         changes: "- The game is now content complete<br>"
